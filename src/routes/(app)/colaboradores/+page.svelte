@@ -4,7 +4,7 @@
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	const locale = data.locale;
+	let locale = $derived(data.locale);
 
 	let showNewForm = $state(false);
 
@@ -51,7 +51,7 @@
 						<input type="text" name="documentId" id="documentId" class="w-full px-3 py-2 border rounded-md text-sm" />
 					</div>
 					<div class="md:col-span-2">
-						<label class="block text-sm font-semibold mb-1">Colonias asignadas</label>
+						<span class="block text-sm font-semibold mb-1">Colonias asignadas</span>
 						<div class="flex flex-wrap gap-2">
 							{#each data.colonies as c}
 								<label class="flex items-center gap-1.5 text-sm bg-gray-50 px-3 py-1.5 rounded border cursor-pointer hover:bg-gray-100">

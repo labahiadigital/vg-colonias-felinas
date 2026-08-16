@@ -5,7 +5,7 @@
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	const locale = data.locale;
+	let locale = $derived(data.locale);
 
 	let showNewForm = $state(false);
 

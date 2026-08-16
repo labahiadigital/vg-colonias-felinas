@@ -4,10 +4,10 @@
 	import type { PageData } from './$types.js';
 
 	let { data }: { data: PageData } = $props();
-	const locale = data.locale;
-	const coloniesData = data.colonies;
-	const feedingPointsData = data.feedingPoints;
-	const incidentsData = data.incidents;
+	let locale = $derived(data.locale);
+	let coloniesData = $derived(data.colonies);
+	let feedingPointsData = $derived(data.feedingPoints);
+	let incidentsData = $derived(data.incidents);
 
 	let mapContainer: HTMLDivElement;
 	let map: any;

@@ -10,8 +10,13 @@
 		{ href: '/mapa', icon: '🗺️', key: 'nav.map' },
 		{ href: '/colonias', icon: '📍', key: 'nav.colonies' },
 		{ href: '/gatos', icon: '🐈', key: 'nav.cats' },
+		{ href: '/salud', icon: '💊', key: 'nav.health' },
+		{ href: '/cer', icon: '✂️', key: 'nav.cer' },
 		{ href: '/incidencias', icon: '⚠️', key: 'nav.incidents' },
+		{ href: '/inspecciones', icon: '📋', key: 'nav.inspections' },
 		{ href: '/colaboradores', icon: '👥', key: 'nav.collaborators' },
+		{ href: '/adopciones', icon: '🏠', key: 'nav.adoptions' },
+		{ href: '/mensajes', icon: '💬', key: 'nav.messages' },
 		{ href: '/informes', icon: '📊', key: 'nav.reports' },
 		{ href: '/configuracion', icon: '⚙️', key: 'nav.settings' }
 	];

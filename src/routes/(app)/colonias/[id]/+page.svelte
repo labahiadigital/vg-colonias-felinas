@@ -6,8 +6,8 @@
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	const locale = data.locale;
-	const colony = data.colony;
+	let locale = $derived(data.locale);
+	let colony = $derived(data.colony);
 
 	let activeTab = $state('general');
 	let editing = $state(false);
@@ -64,8 +64,7 @@
 			<a href="/colonias" class="text-sm text-primary hover:underline mb-2 inline-block">← Volver a colonias</a>
 			<div class="flex items-center gap-3">
 				<h2 class="text-2xl font-bold text-gray-800">{colony.name}</h2>
-				{@const badge = statusBadge(colony.status)}
-				<span class="px-2.5 py-1 rounded-full text-xs font-bold {badge.bg}">{badge.label}</span>
+				<span class="px-2.5 py-1 rounded-full text-xs font-bold {statusBadge(colony.status).bg}">{statusBadge(colony.status).label}</span>
 			</div>
 			<p class="text-sm text-gray-500 mt-1">{colony.district ?? ''} {colony.classification ? `- ${colony.classification}` : ''}</p>
 		</div>

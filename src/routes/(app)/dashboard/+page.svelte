@@ -3,10 +3,10 @@
 	import type { PageData } from './$types.js';
 
 	let { data }: { data: PageData } = $props();
-	const locale = data.locale;
-	const user = data.user;
-	const stats = data.stats;
-	const recentActivity = data.recentActivity;
+	let locale = $derived(data.locale);
+	let user = $derived(data.user);
+	let stats = $derived(data.stats);
+	let recentActivity = $derived(data.recentActivity);
 
 	function actionIcon(entity: string): string {
 		const icons: Record<string, string> = {

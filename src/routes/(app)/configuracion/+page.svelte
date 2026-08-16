@@ -4,8 +4,8 @@
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	const locale = data.locale;
-	const user = data.user;
+	let locale = $derived(data.locale);
+	let user = $derived(data.user);
 
 	let activeSection = $state('profile');
 </script>
@@ -67,7 +67,7 @@
 							</div>
 							{#if data.userRole}
 								<div>
-									<label class="block text-sm font-semibold mb-1">Rol</label>
+									<span class="block text-sm font-semibold mb-1">Rol</span>
 									<div class="px-3 py-2 bg-gray-50 border rounded-md text-sm capitalize">{data.userRole}</div>
 								</div>
 							{/if}

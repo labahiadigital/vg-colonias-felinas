@@ -295,6 +295,20 @@ export const notifications = pgTable('notifications', {
 	createdAt: timestamp('created_at').defaultNow()
 });
 
+// ─── Catalogs (Configurable) ────────────────────────────────────
+
+export const catalogs = pgTable('catalogs', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	type: text('type').notNull(),
+	key: text('key').notNull(),
+	label: text('label').notNull(),
+	labelEu: text('label_eu'),
+	sortOrder: integer('sort_order').default(0),
+	isActive: boolean('is_active').default(true),
+	metadata: jsonb('metadata'),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
 // ─── Audit Logs ─────────────────────────────────────────────────
 
 export const auditLogs = pgTable('audit_logs', {

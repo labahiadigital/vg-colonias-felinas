@@ -5,7 +5,7 @@
 	import type { PageData } from './$types.js';
 
 	let { data }: { data: PageData } = $props();
-	const locale = data.locale;
+	let locale = $derived(data.locale);
 
 	let email = $state('');
 	let password = $state('');

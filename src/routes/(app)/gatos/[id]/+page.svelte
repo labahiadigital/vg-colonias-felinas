@@ -5,8 +5,8 @@
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	const locale = data.locale;
-	const cat = data.cat;
+	let locale = $derived(data.locale);
+	let cat = $derived(data.cat);
 
 	let activeTab = $state('info');
 	let editing = $state(false);

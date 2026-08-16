@@ -3,8 +3,8 @@
 	import type { PageData } from './$types.js';
 
 	let { data }: { data: PageData } = $props();
-	const locale = data.locale;
-	const kpis = data.kpis;
+	let locale = $derived(data.locale);
+	let kpis = $derived(data.kpis);
 
 	function categoryLabel(c: string): string {
 		const map: Record<string, string> = {
@@ -53,9 +53,14 @@
 			<h2 class="text-2xl font-bold text-gray-800">{t(locale, 'reports.title')}</h2>
 			<p class="text-sm text-gray-500 mt-1">Indicadores y estadísticas del programa</p>
 		</div>
-		<button onclick={exportCSV} class="px-5 py-2.5 bg-accent text-white font-semibold rounded-md hover:bg-green-700 transition-colors">
-			📥 Exportar CSV
-		</button>
+		<div class="flex gap-2">
+			<button onclick={exportCSV} class="px-4 py-2 bg-accent text-white font-semibold rounded-md hover:bg-green-700 transition-colors text-sm">
+				📥 {t(locale, 'reports.export_excel')}
+			</button>
+			<a href="/api/export-pdf?type=general" target="_blank" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 transition-colors text-sm inline-flex items-center">
+				📄 {t(locale, 'reports.export_pdf')}
+			</a>
+		</div>
 	</div>
 
 	<!-- KPIs -->
