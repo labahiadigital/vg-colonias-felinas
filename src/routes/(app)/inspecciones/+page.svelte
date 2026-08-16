@@ -9,6 +9,17 @@
 	let showNewForm = $state(false);
 	let showTemplateForm = $state(false);
 	let activeTab = $state<'list' | 'templates'>('list');
+
+	const quickFields = [
+		{ name: 'estado_general', label: 'Estado general', type: 'select', options: ['Bueno', 'Regular', 'Malo', 'Crítico'] },
+		{ name: 'agua_disponible', label: 'Agua disponible', type: 'select', options: ['Sí', 'No'] },
+		{ name: 'comida_disponible', label: 'Comida disponible', type: 'select', options: ['Sí', 'No'] },
+		{ name: 'refugios', label: 'Refugios en buen estado', type: 'select', options: ['Sí', 'No', 'Parcial'] },
+		{ name: 'gatos_vistos', label: 'Gatos vistos (aprox.)', type: 'number' },
+		{ name: 'limpieza', label: 'Limpieza zona', type: 'select', options: ['Buena', 'Aceptable', 'Deficiente'] }
+	];
+
+	let quickResults = $state<Record<string, string>>({});
 </script>
 
 <div>
@@ -47,16 +58,36 @@
 						{/each}
 					</select>
 				</div>
-				<div class="md:col-span-2">
-					<label for="results" class="block text-sm font-semibold mb-1">{t(locale, 'inspections.results')}</label>
-					<textarea name="results" id="results" rows="4" placeholder="Escriba los resultados de la inspección..." class="w-full px-3 py-2 border rounded-md text-sm"></textarea>
+
+				<div class="md:col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-4">
+					<p class="text-sm font-bold text-blue-800 mb-3">Evaluacion rapida</p>
+					<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+						{#each quickFields as field}
+							<div>
+								<label for={`qf-${field.name}`} class="block text-xs font-semibold text-gray-700 mb-1">{field.label}</label>
+								{#if field.type === 'select'}
+									<select id={`qf-${field.name}`} bind:value={quickResults[field.name]} class="w-full px-3 py-2 border rounded-md text-sm">
+										<option value="">--</option>
+										{#each field.options as opt}
+											<option value={opt}>{opt}</option>
+										{/each}
+									</select>
+								{:else}
+									<input type={field.type} id={`qf-${field.name}`} bind:value={quickResults[field.name]} class="w-full px-3 py-2 border rounded-md text-sm" />
+								{/if}
+							</div>
+						{/each}
+					</div>
 				</div>
+
+				<input type="hidden" name="results" value={JSON.stringify(quickResults)} />
+
 				<div class="md:col-span-2">
 					<label for="notes" class="block text-sm font-semibold mb-1">{t(locale, 'inspections.notes')}</label>
-					<textarea name="notes" id="notes" rows="2" class="w-full px-3 py-2 border rounded-md text-sm"></textarea>
+					<textarea name="notes" id="notes" rows="3" placeholder="Observaciones adicionales..." class="w-full px-3 py-2 border rounded-md text-sm"></textarea>
 				</div>
 				<div class="md:col-span-2">
-					<button type="submit" class="px-5 py-2 bg-primary text-white rounded-md font-semibold hover:bg-primary-dark">{t(locale, 'common.save')}</button>
+					<button type="submit" class="w-full sm:w-auto px-5 py-3 bg-primary text-white rounded-md font-semibold hover:bg-primary-dark text-base">{t(locale, 'common.save')}</button>
 				</div>
 			</form>
 		</div>

@@ -9,8 +9,31 @@
 	let showNewConversation = $state(false);
 	let activeTab = $state<'conversations' | 'notifications'>('conversations');
 	let selectedConversation = $state<string | null>(null);
+	let chatMessages = $state<Array<{ id: string; content: string; sentAt: string; senderId: string; senderName: string }>>([]);
+	let loadingMessages = $state(false);
 
 	let unreadCount = $derived(data.notifications?.filter((n: { readAt: unknown }) => !n.readAt).length || 0);
+
+	async function selectConversation(id: string) {
+		selectedConversation = id;
+		loadingMessages = true;
+		try {
+			const res = await fetch(`/api/messages/${id}`);
+			if (res.ok) chatMessages = await res.json();
+		} finally {
+			loadingMessages = false;
+		}
+	}
+
+	async function handleSendMessage(e: SubmitEvent) {
+		const form = e.target as HTMLFormElement;
+		const fd = new FormData(form);
+		const res = await fetch(form.action, { method: 'POST', body: fd });
+		if (res.ok) {
+			form.reset();
+			if (selectedConversation) await selectConversation(selectedConversation);
+		}
+	}
 </script>
 
 <div>
@@ -82,8 +105,8 @@
 			<div class="bg-white rounded-xl shadow-sm border overflow-hidden">
 				<div class="divide-y">
 					{#each data.conversations as convo}
-						<button onclick={() => selectedConversation = convo.id}
-							class="w-full text-left px-4 py-3 hover:bg-gray-50 {selectedConversation === convo.id ? 'bg-primary/5 border-l-4 border-primary' : ''}">
+					<button onclick={() => selectConversation(convo.id)}
+						class="w-full text-left px-4 py-3 hover:bg-gray-50 {selectedConversation === convo.id ? 'bg-primary/5 border-l-4 border-primary' : ''}">
 							<p class="font-semibold text-sm">{convo.title || 'Sin título'}</p>
 							{#if convo.lastMessage}
 								<p class="text-xs text-gray-500 truncate mt-0.5">{convo.lastMessage.senderName}: {convo.lastMessage.content}</p>
@@ -102,11 +125,25 @@
 			<!-- Chat area -->
 			<div class="md:col-span-2 bg-white rounded-xl shadow-sm border flex flex-col min-h-[400px]">
 				{#if selectedConversation}
-					<div class="flex-1 p-4 overflow-y-auto">
-						<p class="text-center text-gray-400 text-sm py-8">Carga los mensajes de esta conversación.<br/>La funcionalidad de chat en tiempo real está en proceso.</p>
+					<div class="flex-1 p-4 overflow-y-auto space-y-3">
+						{#if loadingMessages}
+							<p class="text-center text-gray-400 text-sm py-8">Cargando mensajes...</p>
+						{:else if chatMessages.length === 0}
+							<p class="text-center text-gray-400 text-sm py-8">No hay mensajes aún. Envía el primero.</p>
+						{:else}
+							{#each chatMessages as msg}
+								<div class="flex flex-col {msg.senderId === data.currentUserId ? 'items-end' : 'items-start'}">
+									<span class="text-xs text-gray-400 mb-0.5">{msg.senderName}</span>
+									<div class="max-w-[75%] px-3 py-2 rounded-lg text-sm {msg.senderId === data.currentUserId ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}">
+										{msg.content}
+									</div>
+									<span class="text-xs text-gray-300 mt-0.5">{msg.sentAt ? new Date(msg.sentAt).toLocaleString('es-ES') : ''}</span>
+								</div>
+							{/each}
+						{/if}
 					</div>
 					<div class="border-t p-3">
-						<form method="POST" action="?/sendMessage" use:enhance class="flex gap-2">
+						<form method="POST" action="?/sendMessage" onsubmit={handleSendMessage} class="flex gap-2">
 							<input type="hidden" name="conversationId" value={selectedConversation} />
 							<input type="text" name="content" placeholder={t(locale, 'messages.placeholder')} required
 								class="flex-1 px-3 py-2 border rounded-md text-sm" />

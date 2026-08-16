@@ -50,6 +50,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		locale: locals.locale,
+		currentUserId: locals.user.id,
 		conversations: convosWithLastMessage,
 		notifications: userNotifications,
 		users: allUsers

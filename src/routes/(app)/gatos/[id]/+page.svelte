@@ -8,9 +8,13 @@
 	let locale = $derived(data.locale);
 	let cat = $derived(data.cat);
 
+	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
+
 	let activeTab = $state('info');
 	let editing = $state(false);
 	let showHealthForm = $state(false);
+	let showDeleteConfirm = $state(false);
+	let deleteFormEl: HTMLFormElement;
 
 	function healthTypeLabel(type: string): string {
 		const labels: Record<string, string> = {
@@ -55,6 +59,8 @@
 					<button onclick={() => editing = !editing} class="flex-1 px-3 py-2 bg-primary text-white text-sm rounded-md font-semibold hover:bg-primary-dark">
 						{editing ? 'Cancelar' : '✏️ Editar'}
 					</button>
+					<button onclick={() => showDeleteConfirm = true} class="px-3 py-2 bg-red-600 text-white text-sm rounded-md font-semibold hover:bg-red-700">🗑️</button>
+					<form bind:this={deleteFormEl} method="POST" action="?/delete" use:enhance class="hidden"></form>
 				</div>
 			</div>
 		</div>
@@ -258,3 +264,12 @@
 		</div>
 	</div>
 </div>
+
+<ConfirmDialog
+	open={showDeleteConfirm}
+	title="Eliminar gato"
+	message="¿Estás seguro de que quieres eliminar este registro? Se perderán los datos sanitarios, CER y adopciones asociadas."
+	confirmLabel="Sí, eliminar"
+	onconfirm={() => { showDeleteConfirm = false; deleteFormEl?.requestSubmit(); }}
+	oncancel={() => showDeleteConfirm = false}
+/>

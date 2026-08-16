@@ -26,7 +26,7 @@
 	}
 </script>
 
-<nav class="flex flex-col h-full bg-sidebar text-white">
+<nav class="flex flex-col h-full bg-sidebar text-white" aria-label="Navegación principal">
 	<div class="p-5 border-b border-white/10">
 		<div class="flex items-center justify-between">
 			<h1 class="text-lg font-bold leading-tight">VG GESTIÓN FELINA</h1>

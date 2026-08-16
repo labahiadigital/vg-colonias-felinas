@@ -19,19 +19,88 @@ Aplicación web responsive para la gestión integral de colonias felinas urbanas
 
 ## Módulos Funcionales
 
-1. **Dashboard** - Panel con KPIs, actividad reciente y accesos rápidos
-2. **Mapa de Colonias** - Cartografía con capas (colonias, alimentación, incidencias, zonas críticas/sensibles/campeo), filtros por estado y distrito, geolocalización
-3. **Gestión de Colonias** - CRUD completo, asociación con gatos, puntos de alimentación e incidencias
-4. **Censo Individual de Gatos** - Ficha por animal con microchip, esterilización, historial sanitario
-5. **Salud Animal** - Registros sanitarios (vacunación, esterilización, desparasitación, cirugía, microchip)
-6. **Programa CER** - Captura-Esterilización-Retorno con indicadores y gráficos de evolución
-7. **Incidencias y Quejas** - Registro geolocalizado, asignación de responsable, comentarios/historial, filtros avanzados
-8. **Inspecciones** - Plantillas configurables, formularios, asociación con colonias
-9. **Colaboradores** - Registro, aprobación, credencial digital con QR, gestión LOPD
-10. **Adopciones** - Flujo completo con trazabilidad y documentación
-11. **Mensajes y Comunicaciones** - Chat interno, notificaciones segmentadas
-12. **Informes e Indicadores** - KPIs, gráficos, exportación CSV/PDF por módulo
-13. **Configuración y Administración** - Gestión de usuarios, roles RBAC, permisos granulares, catálogos configurables, auditoría
+### 1. Dashboard
+Panel principal con KPIs en tiempo real, actividad reciente, y accesos rápidos a todos los módulos.
+
+### 2. Cartografía y Geolocalización
+- Mapa interactivo con capas editables: colonias, puntos de alimentación, incidencias, zonas críticas, zonas sensibles, zonas de campeo.
+- Activar/desactivar capas individualmente.
+- Filtros por estado y distrito.
+- Geolocalización automática desde dispositivo móvil.
+- Navegación desde el mapa a fichas de cada elemento.
+
+### 3. Gestión de Colonias
+- CRUD completo con identificador único.
+- Ficha detallada con geolocalización, estado, clasificación, zonas de campeo.
+- Asociación con gatos, puntos de alimentación, incidencias y acciones CER.
+- Historial de cambios vía auditoría.
+- Confirmación para acciones destructivas.
+
+### 4. Censo Individual de Gatos
+- Ficha individual con fotografía, sexo, estado, esterilización, microchip.
+- Historial sanitario completo (vacunaciones, desparasitaciones, cirugías).
+- Relación con colonia, adopciones y acciones CER.
+- Trazabilidad cronológica.
+
+### 5. Salud Animal
+- Registros sanitarios: vacunación, esterilización, desparasitación, microchip, cirugía, revisión.
+- Búsqueda y filtros por tipo de actuación.
+- Vinculación con gato y colonia.
+- Identificación del veterinario/clínica.
+
+### 6. Programa CER (Captura-Esterilización-Retorno)
+- Registro de actuaciones de captura, esterilización y retorno.
+- Relación con animal y colonia.
+- Indicadores de estado por fases.
+- Tabla con historial evolutivo.
+
+### 7. Incidencias y Quejas
+- Registro geolocalizado con captura automática de coordenadas.
+- Categorización, prioridad (crítica/alta/media/baja) y estado configurable.
+- Asignación de responsable.
+- Historial de comentarios y actuaciones.
+- Filtros avanzados por estado, prioridad y categoría.
+- Alertas visuales según prioridad.
+
+### 8. Inspecciones
+- Plantillas de inspección configurables.
+- Formulario móvil con campos de evaluación rápida.
+- Asociación con colonias.
+- Registro de resultados estructurados y observaciones.
+
+### 9. Colaboradores
+- Registro, aprobación/rechazo, alta/baja.
+- Credencial digital con QR.
+- Exportación PDF de credencial.
+- Gestión LOPD (firma de información de privacidad).
+- Asociación con colonias.
+
+### 10. Adopciones y Trazabilidad
+- Flujo completo: registro → aprobación → completar.
+- Datos del adoptante con restricción de acceso.
+- Consentimiento informado.
+- Trazabilidad del cambio de estado del animal.
+
+### 11. Comunicaciones y Notificaciones
+- Chat interno con conversaciones por participantes.
+- Carga de mensajes en tiempo real.
+- Notificaciones segmentadas por usuario.
+- Marcar leídas individualmente o en lote.
+
+### 12. Informes e Indicadores
+- KPIs globales (colonias, gatos, esterilizaciones, incidencias).
+- Gráficos de evolución.
+- Exportación CSV por entidad (colonias, gatos, incidencias, CER, salud, colaboradores).
+- Exportación PDF de informe general.
+- Registro de auditoría exportable.
+
+### 13. Configuración y Administración
+- Perfil de usuario y preferencias.
+- Gestión de usuarios con asignación de roles.
+- Creación de roles personalizados.
+- Matriz de permisos granulares (módulo × acción).
+- Catálogos configurables bilingües.
+- Registro completo de auditoría.
 
 ## RBAC - Roles y Permisos
 
@@ -43,7 +112,17 @@ Aplicación web responsive para la gestión integral de colonias felinas urbanas
 | `entidad_gestora` | Entidad gestora o coordinadora |
 | `colaborador` | Persona colaboradora/alimentadora autorizada |
 
-Permisos granulares por módulo: `view`, `create`, `edit`, `validate`, `close`, `export`, `admin`, `access_personal_data`, `access_health_data`, `access_geo_sensitive`.
+**11 módulos × 10 acciones = 110 permisos base**, asignados por rol:
+`view`, `create`, `edit`, `validate`, `close`, `export`, `admin`, `access_personal_data`, `access_health_data`, `access_geo_sensitive`.
+
+## Accesibilidad
+
+- Skip navigation (saltar al contenido principal).
+- Focus visible en todos los controles interactivos.
+- `aria-label` en navegación, botones y diálogos.
+- `role` y `aria-modal` en diálogos de confirmación.
+- Contraste adecuado (WCAG 2.1 AA como referencia).
+- Formularios accesibles con labels asociados.
 
 ## Configuración Local
 
@@ -104,19 +183,20 @@ npm run dev
 | Endpoint | Método | Descripción |
 |---|---|---|
 | `/api/auth/[...all]` | * | Better Auth endpoints |
-| `/api/seed` | POST | Seed de datos demo |
+| `/api/seed` | POST | Seed de datos demo (key=seed-2026-vg) |
 | `/api/set-locale` | POST | Cambiar idioma |
-| `/api/export-excel` | GET | Exportación CSV (type: colonies, cats, incidents, cer, health, collaborators) |
+| `/api/messages/[conversationId]` | GET | Mensajes de una conversación |
+| `/api/export-excel` | GET | Exportación CSV (type: colonies/cats/incidents/cer/health/collaborators) |
 | `/api/export-pdf` | GET | Informe general PDF/HTML |
 | `/api/credencial/[id]` | GET | Credencial digital de colaborador |
 
 ## Internacionalización
 
-Dos idiomas en igualdad: Castellano (es) y Euskera (eu). Sistema de claves en `src/lib/i18n/`. Selector de idioma en cabecera.
+Dos idiomas en igualdad: Castellano (es) y Euskera (eu). Sistema de claves en `src/lib/i18n/`. Selector de idioma en cabecera. Catálogos bilingües.
 
 ## Seguridad y RGPD
 
-- Autenticación con Better Auth (email + contraseña)
+- Autenticación con Better Auth (email + contraseña, UUID para IDs)
 - RBAC con permisos granulares por módulo y acción
 - Registro de auditoría para todas las acciones relevantes
 - Base de datos en UE (Neon PostgreSQL)
@@ -124,6 +204,7 @@ Dos idiomas en igualdad: Castellano (es) y Euskera (eu). Sistema de claves en `s
 - Principio de mínimo privilegio
 - Separación de datos personales y operativos
 - Información de privacidad para colaboradores
+- Confirmación para acciones destructivas
 
 ## Catálogos Configurables
 
@@ -135,48 +216,55 @@ Estados, categorías y clasificaciones se gestionan desde Configuración > Catá
 - Tipo de actuación sanitaria
 - Estado de adopción y colaborador
 
+37 entradas bilingües (ES/EU) precargadas.
+
 ## Estructura del Proyecto
 
 ```
 src/
 ├── lib/
-│   ├── i18n/           # Internacionalización ES/EU
+│   ├── i18n/              # Internacionalización ES/EU
 │   ├── server/
-│   │   ├── db/         # Schema Drizzle + conexión Neon
-│   │   ├── auth/       # Better Auth config
-│   │   ├── audit.ts    # Utilidad de auditoría
-│   │   └── rbac.ts     # Helpers RBAC
-│   ├── auth-client.ts  # Better Auth client
-│   └── components/     # Componentes layout
+│   │   ├── db/            # Schema Drizzle + conexión Neon
+│   │   ├── auth/          # Better Auth config (UUID)
+│   │   ├── audit.ts       # Utilidad de auditoría
+│   │   └── rbac.ts        # Helpers RBAC
+│   ├── auth-client.ts     # Better Auth client
+│   └── components/
+│       ├── layout/        # Sidebar, Header
+│       └── ui/            # ConfirmDialog
 ├── routes/
-│   ├── (auth)/         # Login, recuperar contraseña
-│   ├── (app)/          # Módulos protegidos
+│   ├── (auth)/            # Login, recuperar contraseña
+│   ├── (app)/             # Módulos protegidos
 │   │   ├── dashboard/
 │   │   ├── mapa/
-│   │   ├── colonias/
-│   │   ├── gatos/
+│   │   ├── colonias/      # Lista + [id] detalle
+│   │   ├── gatos/         # Lista + [id] detalle
 │   │   ├── salud/
 │   │   ├── cer/
 │   │   ├── incidencias/
 │   │   ├── inspecciones/
-│   │   ├── colaboradores/
+│   │   ├── colaboradores/  # Lista + [id] detalle+credencial
 │   │   ├── adopciones/
 │   │   ├── mensajes/
 │   │   ├── informes/
 │   │   └── configuracion/
-│   └── api/            # Endpoints REST
+│   └── api/               # Endpoints REST
 ```
 
 ## Elementos [PENDIENTE DE CONFIRMAR]
 
-- Formato, firma y validez de la credencial digital
+- Formato, firma y validez definitiva de la credencial digital
 - Plantillas oficiales de certificados e inspecciones
 - Integraciones GIS municipales
-- Proveedor cartográfico definitivo
+- Proveedor cartográfico definitivo (propuesto: OpenStreetMap)
 - Firma electrónica de documentos
-- Canales externos de notificación (SMS, email transaccional)
+- Canales externos de notificación (SMS, email transaccional, push)
 - SLA contractual y tiempos de respuesta
 - RPO, RTO y disponibilidad garantizada
 - ENS, certificaciones de seguridad
-- Datos y formato de migración del sistema actual
+- Datos, formato y volumen de migración del sistema actual
 - Formato de reversibilidad y entrega de datos
+- Navegadores y versiones compatibles
+- Estándar WCAG contractual definitivo
+- Bases jurídicas y plazos de conservación (requiere validación jurídica)

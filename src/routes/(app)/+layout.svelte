@@ -34,7 +34,7 @@
 			user={data.user}
 			onMenuToggle={() => (sidebarOpen = !sidebarOpen)}
 		/>
-		<main class="flex-1 overflow-y-auto p-4 lg:p-6 bg-[#f4f7f6]">
+		<main id="main-content" class="flex-1 overflow-y-auto p-4 lg:p-6 bg-[#f4f7f6]">
 			{@render children()}
 		</main>
 	</div>

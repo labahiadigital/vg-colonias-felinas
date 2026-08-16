@@ -9,17 +9,22 @@
 	let locale = $derived(data.locale);
 	let colony = $derived(data.colony);
 
+	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
+
 	let activeTab = $state('general');
 	let editing = $state(false);
-	let mapEl: HTMLDivElement;
+	let showDeleteConfirm = $state(false);
+	let mapEl = $state<HTMLDivElement>();
 
-	const tabs = [
+	let deleteFormEl: HTMLFormElement;
+
+	let tabs = $derived([
 		{ id: 'general', label: 'General', icon: '📋' },
 		{ id: 'map', label: 'Mapa', icon: '🗺️' },
 		{ id: 'cats', label: `Gatos (${data.cats.length})`, icon: '🐈' },
 		{ id: 'cer', label: `CER (${data.cerActions.length})`, icon: '✂️' },
 		{ id: 'incidents', label: `Incidencias (${data.incidents.length})`, icon: '⚠️' }
-	];
+	]);
 
 	function statusBadge(status: string) {
 		const map: Record<string, { bg: string; label: string }> = {
@@ -72,6 +77,10 @@
 			<button onclick={() => editing = !editing} class="px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold hover:bg-primary-dark">
 				{editing ? 'Cancelar' : '✏️ Editar'}
 			</button>
+			<button onclick={() => showDeleteConfirm = true} class="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700">
+				🗑️ Eliminar
+			</button>
+			<form bind:this={deleteFormEl} method="POST" action="?/delete" use:enhance class="hidden"></form>
 		</div>
 	</div>
 
@@ -307,3 +316,12 @@
 		</div>
 	{/if}
 </div>
+
+<ConfirmDialog
+	open={showDeleteConfirm}
+	title="Eliminar colonia"
+	message="¿Estás seguro de que quieres eliminar esta colonia? Esta acción no se puede deshacer y se perderán todos los datos asociados."
+	confirmLabel="Sí, eliminar"
+	onconfirm={() => { showDeleteConfirm = false; deleteFormEl?.requestSubmit(); }}
+	oncancel={() => showDeleteConfirm = false}
+/>
