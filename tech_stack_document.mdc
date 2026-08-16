@@ -1,0 +1,144 @@
+---
+description: Apply these rules when making changes to the project
+globs:
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+# Tech Stack Document for Vitoria-Gasteiz Urban Feline Colonies Management
+
+Este documento explica en un lenguaje sencillo las decisiones tecnológicas tomadas para construir la aplicación web responsive que gestionará integralmente las colonias felinas del Ayuntamiento de Vitoria-Gasteiz.
+
+## 1. Frontend Technologies
+
+• **Svelte & SvelteKit** [OBLIGATORIO]
+  - Framework reactivo y ligero que compila a JavaScript muy optimizado.
+  - SvelteKit aporta enrutado, renderizado en servidor (SSR) y soporte a acciones de formulario sin JavaScript.
+  - Beneficio: interfaces rápidas, carga inicial ágil y SEO friendly.
+
+• **TypeScript** [OBLIGATORIO]
+  - Tipado estático para reducir errores en tiempo de desarrollo.
+  - Mejora el autocompletado y la mantenibilidad del código.
+
+• **Diseño responsive mobile-first** [OBLIGATORIO]
+  - CSS con media queries, flexbox y grid.
+  - Prioridad en móviles: navegación por pestañas, botones grandes y carga progresiva.
+
+• **Biblioteca de componentes UI** (Propuesta)
+  - Ejemplos: Svelte Material UI o Skeleton.
+  - Facilita consistencia visual y accesibilidad básica.
+
+• **Validación de formularios** (Propuesta)
+  - Librerías como Zod o Yup integradas en acciones de SvelteKit.
+  - Garantiza integridad de datos antes de enviarlos al servidor.
+
+• **Mapas** (Propuesta)
+  - Leaflet o MapLibre con proveedores de teselas configurables.
+  - Permite dibujar polígonos, puntos de alimentación y capturar GPS automáticamente.
+
+
+## 2. Backend Technologies
+
+• **Arquitectura: Monolito modular** [OBLIGATORIO]
+  - Un único proyecto con módulos independientes (colonias, gatos, CER, etc.).
+  - Facilita despliegue y portabilidad.
+
+• **Base de datos: PostgreSQL gestionado en EU con Neon** [OBLIGATORIO]
+  - Cumple exigencias de datos en la UE y GDPR.
+  - Soporta tipos geoespaciales necesarios para cartografía.
+
+• **ORM** (Propuesta)
+  - Drizzle ORM o Prisma.
+  - Abstrae queries SQL, mantiene esquema tipado.
+
+• **Autenticación y RBAC: Better Auth** [OBLIGATORIO]
+  - Gestiona registro, inicio de sesión, recuperación de contraseña y 2FA opcional.
+  - Roles configurables con permisos por módulo y acción.
+
+• **API y lógica de servidor**
+  - SvelteKit server routes (`+server.ts`) y form actions (`+page.server.ts`) [OBLIGATORIO].
+  - CSRF protegido y soporta progressive enhancement.
+
+• **Almacenamiento de archivos** (Propuesta)
+  - MinIO o similar en la UE para fotos, PDFs y documentos.
+
+• **Generación de PDFs** (Propuesta)
+  - PDFKit o Puppeteer para certificados clínicos y memorias.
+
+
+## 3. Infrastructure and Deployment
+
+• **Control de versiones**: Git en GitHub.
+
+• **CI/CD**: GitHub Actions
+  - Linters (ESLint, Prettier), tests (Vitest, Playwright), builds y despliegues automáticos.
+
+• **Hosting** (Propuesta)
+  - Fly.io, Cloudflare Pages (frontend) y servidor Node en región EU.
+  - Neon en EU para la base de datos.
+  - MinIO o S3 compatible con ubicación en UE.
+
+• **Observabilidad** (Propuesta)
+  - Sentry para errores en producción.
+  - Prometheus + Grafana para métricas y dashboards.
+
+• **Copias de seguridad y recuperación**
+  - Backups diarios y point-in-time recovery (PITR) para PostgreSQL.
+
+
+## 4. Third-Party Integrations
+
+• **Better Auth** [OBLIGATORIO]
+  - Servicio de autenticación y gestión de usuarios.
+
+• **Proveedor de mapas** (Propuesta; [VALIDACIÓN JURÍDICA])
+  - Leaflet/MapLibre con tiles EU-hosted.
+  - Pendiente confirmar licencia y subcontratación.
+
+• **Correo electrónico** (Propuesta; [CONFIRMAR])
+  - SMTP alojado en la UE para notificaciones funcionales.
+
+• **Canales externos (SMS, WhatsApp, push)**
+  - Sujetos a validación contractual y legal. Plantillas configurables.
+
+• **Chat interno**
+  - Módulo nativo que no subcontrata servicios externos.
+
+
+## 5. Security and Performance Considerations
+
+### Seguridad
+
+• **Comunicación segura**: HTTPS/TLS en todos los endpoints.
+• **Autenticación fuerte**: Better Auth con 2FA opcional.
+• **RBAC**: Principio de mínimo privilegio, permisos por módulo/acción.
+• **Validación de entrada**: Zod/Yup en cliente y servidor.
+• **Protección OWASP**: Sanitización de datos, CSRF, XSS, CSP.
+• **Cifrado de datos sensibles**: At-rest en base de datos y objetos.
+• **Gestión de secretos**: Variables de entorno, nunca en código.
+• **Entornos aislados**: Dev, staging y producción separados.
+• **Auditoría**: Registro de altas, modificaciones, exportaciones y accesos administrativos sin incluir datos personales.
+• **Cumplimiento GDPR**: Minimización de datos, pseudonimización, retención configurable y derechos ARCO.
+
+### Rendimiento
+
+• **API ágil**: Tiempo medio de respuesta <200 ms.
+• **Carga inicial**: <2 s en 3G móvil.
+• **Clustering de mapas**: Previene cargas masivas de geoJSON.
+• **Caching**: Estrategias cache-first y stale-while-revalidate para activos y API.
+• **Lazy loading** de módulos y recursos pesados.
+• **Índices DB**: Geoespaciales y campos más consultados.
+
+
+## 6. Conclusion and Overall Tech Stack Summary
+
+Hemos elegido un **monolito modular** en **SvelteKit + TypeScript** que cumple el stack obligatorio (Svelte, TypeScript, Neon, Better Auth) y aprovecha propuestas maduras para acelerar el desarrollo (ORM, validación, UI, mapas, almacenamiento y observabilidad). 
+
+Esta combinación garantiza:
+- **Rendimiento** y **UX ágil** en escritorio y móvil.
+- **Cumplimiento legal** (datos en UE, GDPR, PCAP).
+- **Seguridad** de nivel municipal y buenas prácticas OWASP.
+- **Flexibilidad** para ajustes futuros (plantillas, canales, GIS).
+- **Mantenibilidad** gracias a tests automáticos y CI/CD.
+
+El resultado es una plataforma robusta, escalable y fácil de desplegar, que centraliza todas las necesidades de gestión de colonias felinas en un único lugar.

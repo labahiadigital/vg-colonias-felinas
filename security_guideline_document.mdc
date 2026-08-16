@@ -1,0 +1,159 @@
+---
+description: Apply these rules when making changes to the project
+globs:
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+# Planificación de la Aplicación Web Responsive para la Gestión de Colonias Felinas (Exp. 2026/CO_ASUM/0013)
+
+## 1. Fuentes Contractuales y Jerarquía de Requisitos
+
+- **Pliegos (PPT, PCAP, Anexo X, Resolución de Aprobación)**: fuente de verdad.
+- En caso de contradicción entre este texto y los pliegos, prevalecen estos últimos.
+- Cada requisito se cita con documento, página y apartado (cuando esté disponible).
+
+## 2. Clasificación de Elementos
+
+Usamos las siguientes categorías:
+- **[OBLIGATORIO]**: exigido por los pliegos.
+- **[PROPUESTA]**: recomendación o decisión técnica.
+- **[OPCIONAL]**: mejora no exigida.
+- **[CONFIRMAR]**: información ausente o ambigua.
+- **[VALIDACIÓN JURÍDICA]**: cuestión legal pendiente.
+
+## 3. Alcance y Principales Módulos
+
+### 3.1. Stack Tecnológico Obligatorio
+
+- Svelte y SvelteKit (PPT § 3.1, p. 2) [OBLIGATORIO]
+- TypeScript (PPT § 3.1, p. 2) [OBLIGATORIO]
+- Neon (PostgreSQL en UE) [PCAP, art. X] [OBLIGATORIO]
+- Better Auth para autenticación (PPT § 3.4.2, p. 6) [OBLIGATORIO]
+- Monolito modular con rutas/acciones de SvelteKit (PPT § 3.1, p. 2) [OBLIGATORIO]
+- Diseño responsive mobile-first (PPT § 3.1, p. 2) [OBLIGATORIO]
+
+### 3.2. Propuestas Técnicas a Evaluar
+
+- ORM: Drizzle ORM vs. Prisma ([PROPUESTA])
+- Validación: Zod vs. Yup ([PROPUESTA])
+- Librería UI: Svelte Material UI vs. Skeleton ([PROPUESTA])
+- Mapas: Leaflet vs. MapLibre con teselas EU ([PROPUESTA])
+- Almacenamiento de archivos: MinIO en UE ([PROPUESTA])
+- Generación de PDF: PDFKit vs. Puppeteer ([PROPUESTA])
+- Observabilidad: Sentry + Prometheus/Grafana ([PROPUESTA])
+- Despliegue: Fly.io, Cloudflare Pages o self-hosted en UE ([PROPUESTA])
+
+### 3.3. Restricciones Contractuales
+
+- Todos los servidores, bases de datos, archivos y logs en la UE [PCAP, art. Y] [VALIDACIÓN JURÍDICA]
+- No subcontratación de servicios (PCAP) [VALIDACIÓN JURÍDICA]
+- No asumir autorizaciones de servicios cloud, mapas o comunicaciones de terceros sin aprobación [CONFIRMAR]
+
+## 4. Funcionalidades Detalladas y Clasificación
+
+### 4.1. Gestión de Colonias
+
+- CRUD con identificador, nombre, estado, clasificación, geometrías, zona de campeo, puntos de alimentación, observaciones, gatos, incidencias, inspecciones, documentos, colaboradores e historial. (PPT § 3.2.1, p. 3) [OBLIGATORIO]
+- Baja lógica con marca de inactividad [OBLIGATORIO]
+- Catálogos y reglas exactas de campos: [CONFIRMAR]
+
+### 4.2. Cartografía y Geolocalización
+
+- Mapa con capas editables: colonias, puntos, incidencias, zonas críticas/sensibles/campeo (PPT § 3.1, p. 2) [OBLIGATORIO]
+- Filtros, activación de capas y consulta de fichas [OBLIGATORIO]
+- Edición de geometrías según permisos [OBLIGATORIO]
+- En móvil: captura GPS automática y fotos (evitar entrada manual) [OBLIGATORIO]
+- Proveedor GIS, sistema de coordenadas y licencias: [CONFIRMAR] [VALIDACIÓN JURÍDICA]
+
+### 4.3. Censo Individual de Gatos
+
+- Ficha con ID, colonia, fotos, sexo, estado, esterilización, microchip, vacunas, desparasitación, historial sanitario, adopción/traslado/baja/fallecimiento, documentos y cronología. (PPT § 3.2.2, p. 3) [OBLIGATORIO]
+- Catálogos configurables; no inventar taxonomías [OBLIGATORIO]
+
+### 4.4. Salud y Veterinaria
+
+- Ficha clínica con actuaciones (esterilización, microchip, vacuna, desparasitación), adjuntos y profesional responsable (PPT § 3.2.2, p. 3) [OBLIGATORIO]
+- Generación de certificado PDF: plantilla, numeración, firma y validez oficial [CONFIRMAR]
+
+### 4.5. Programa CER (Trap-Neuter-Return)
+
+- Registro de captura, esterilización y retorno por gato/colonia (PPT § 3.2.3, p. 3) [OBLIGATORIO]
+- Historial, gráficos e indicadores configurables [PROPUESTA]
+- Fórmulas y criterios exactos: [CONFIRMAR]
+
+### 4.6. Incidencias y Quejas
+
+- Alta con geolocalización, relación con colonia/gato, categoría, estado, prioridad, responsable, fotos, documentos, comentarios, alertas visuales e historial. (PPT § 3.2.4, p. 4) [OBLIGATORIO]
+- Consultas en mapa y listado; catálogos configurables [OBLIGATORIO]
+
+### 4.7. Inspecciones
+
+- Plantillas configurables, formularios móviles, fotos, importación de PDF, resultados, seguimiento e historial (PPT § 3.2.5, p. 4) [OBLIGATORIO]
+- Modelos oficiales y campos: [CONFIRMAR]
+
+### 4.8. Colaboradores Autorizados
+
+- Ficha, autorización, estado, vigencia, colonias asignadas y credencial digital (QR, foto, firma, vigencia) (PPT § 3.2.6, p. 4) [OBLIGATORIO]
+- Propósito del tratamiento y evidencia de información de privacidad [OBLIGATORIO]
+- Formato exacto de credencial: [CONFIRMAR]
+
+### 4.9. Adopciones
+
+- Seguimiento de disponibilidad, cambios de estado, trazabilidad y documentos (PPT § 3.2.7, p. 4) [OBLIGATORIO]
+- Datos del adoptante, consentimientos y conservación: [VALIDACIÓN JURÍDICA]
+
+### 4.10. Comunicaciones y Notificaciones
+
+- Chat interno y notificaciones segmentadas por perfil, colonia o zona (PPT § 3.2.8, p. 5) [OBLIGATORIO]
+- Canales externos (SMS/WhatsApp/push): [CONFIRMAR] [VALIDACIÓN JURÍDICA]
+- Plantillas configurables bilingües [PROPUESTA]
+
+### 4.11. Informes e Indicadores
+
+- Búsquedas, filtros, indicadores, gráficos, memorias automáticas por módulo (PPT § 3.2.10, p. 5) [OBLIGATORIO]
+- Exportación a Excel/PDF con control de permisos y auditoría [OBLIGATORIO]
+- Modelos, campos y fórmulas definitivas: [CONFIRMAR]
+
+## 5. Usuarios, Roles y Permisos
+
+- Perfiles mínimos (PPT § 3.2.7, p. 4):
+  1. Administrador municipal [CONFIRMAR]
+  2. Personal técnico municipal [CONFIRMAR]
+  3. Veterinario autorizado [CONFIRMAR]
+  4. Entidad gestora/coordinadora [CONFIRMAR]
+  5. Colaborador/alimentador autorizado [CONFIRMAR]
+- Matriz detallada de permisos por CRUD, propuesta, validación, cierre, exportación y administración: [CONFIRMAR]
+- Principio de mínimo privilegio y revisión periódica [OBLIGATORIO]
+
+## 6. UX, Idiomas y Accesibilidad
+
+- Wireframes de escritorio y móvil para todas las pantallas clave [OBLIGATORIO]
+- UI sencilla, coherente y mobile-first con validaciones, paginación y confirmación de acciones destructivas [OBLIGATORIO]
+- Español y euskera mediante claves i18n (sin auto-traducción) [OBLIGATORIO]
+- WCAG 2.1 AA como referencia [PROPUESTA] [CONFIRMAR]
+
+## 7. Seguridad y Privacidad
+
+- Autenticación (Better Auth), RBAC, sesiones seguras, 2FA opcional, recuperación de contraseña [OBLIGATORIO]
+- HTTPS/TLS 1.2+, cifrado de datos sensibles en tránsito y reposo [OBLIGATORIO]
+- Validación de entradas y protección OWASP Top 10 [OBLIGATORIO]
+- Gestión de adjuntos con escaneo de malware y control de tipos/tamaños [OBLIGATORIO]
+- Secretos en gestor (no en código) y separación de entornos [OBLIGATORIO]
+- Auditoría de altas, modificaciones, exportaciones y accesos administrativos sin datos sensibles [OBLIGATORIO]
+- Cumplimiento RGPD: minimización, finalidades, retención configurable, anonimización [OBLIGATORIO] [VALIDACIÓN JURÍDICA]
+- No afirmar certificaciones no confirmadas (ENS, ISO 27001) [OBLIGATORIO]
+
+## 8. Modelo de Datos Preliminar
+
+**Entidades propuestas (nombres y campos a validar):**
+- User, Role, Permission, Session, Collaborator, Colony, Geometry, FeedingPoint, Cat, HealthRecord, HealthAction, CERAction, Microchip, Vaccination, Deworming, Incident, Inspection, InspectionTemplate, Adoption, Document, Photo, Conversation, Message, Notification, Certificate, Report, Catalog, AuditLog, PrivacyNoticeEvidence, MigrationJob, ExportJob.
+- Relaciones, baja lógica, reglas de integridad, índices geoespaciales y gestión de archivos [PROPUESTA]; campos obligatorios: [CONFIRMAR].
+
+## 9. Pruebas y Criterios de Aceptación
+
+- Unitaria, integración, API, end-to-end, roles/permiso, seguridad, accesibilidad, responsive, i18n, PDF/Excel, cartografía, migración y reversibilidad. [OBLIGATORIO]
+- Definir criterios Given/When/Then por requisito prioritario [PROPUESTA]
+
+---
+*Este documento sintetiza el alcance, requisitos y designaciones de importancia contractual y técnica para asegurar una solución real, operativa y desplegable, conforme al expediente 2026/CO_ASUM/0013 del Ayuntamiento de Vitoria-Gasteiz.*

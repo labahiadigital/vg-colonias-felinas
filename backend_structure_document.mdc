@@ -1,0 +1,406 @@
+---
+description: Apply these rules when making changes to the project
+globs:
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+# Backend Structure Document
+
+This document explains in everyday language how the backend of the Vitoria-Gasteiz feline colonies management app is put together. It covers the architecture, database, APIs, hosting, infrastructure, security, monitoring, and a final summary.
+
+## 1. Backend Architecture
+
+The backend is built as a **modular monolith** using SvelteKit server routes and form actions. This means:
+
+- All code lives in one project, but it’s organized into clear modules (colonies, cats, health, CER, incidents, inspections, collaborators, adoptions, communications, reports, users).
+- We use **SvelteKit** for server-side logic. Instead of a separate API server, each module’s endpoints and form handlers sit alongside the pages that use them.
+- **Design patterns**:
+  - Repository or data-access layer to isolate database queries.
+  - Service layer for business logic in each module.
+  - Controllers (SvelteKit actions/routes) that validate input and call services.
+
+How this supports our goals:
+
+- **Scalability**: Modules can be split into separate services later if needed, and the database can scale independently.
+- **Maintainability**: Clear folder structure and TypeScript types help new developers get onboarded quickly.
+- **Performance**: SvelteKit’s built-in rendering and form actions minimize round trips and support progressive enhancement.
+
+## 2. Database Management
+
+We store all structured data in **PostgreSQL** (managed by Neon in the EU). Key points:
+
+- Type: Relational SQL database with PostGIS for geospatial support (colonies polygons, feeding points, incident locations).
+- Hosted in the EU to meet GDPR and PCAP requirements.
+- **Data practices**:
+  - Logical deletion (soft delete) for records like colonies and cats.
+  - Audit logs tables track create/update/delete/export actions without storing sensitive personal data.
+  - Configurable catalogs (status lists, categories, templates) live in dedicated tables for easy updates.
+- **Portability & reversibility**:
+  - All queries go through the repository layer.
+  - Migration scripts and full data export at end of contract ensure you can move the data elsewhere.
+
+## 3. Database Schema
+
+Below is a human-readable overview of our main tables, followed by an example SQL schema for PostgreSQL.
+
+### 3.1 Human-Readable Schema
+
+- **Users**: login, email, hashed password, profile settings, language preference.
+- **Roles & Permissions**: define RBAC. Each role maps to a set of actions on modules.
+- **Sessions**: track active sessions for logout and auditing.
+- **Collaborators**: authorized feeders/entities, status, validity, assigned colonies, digital credential details.
+- **Colonies**: name, status, classification, geospatial polygon, feeding points list, logical deletion flag.
+- **FeedingPoints**: point geometry, time recorded, attached photos.
+- **Cats**: identifier, linked colony, sex, sterilization status/date, microchip number, adoption or death flag.
+- **HealthRecords**: each procedure (sterilization, vaccination, deworming) with date, vet info, attachments.
+- **CERActions**: Trap-Neuter-Return events with dates, linked cat and colony.
+- **Incidents**: category, priority, location point, status, photos, comments.
+- **Inspections**: linked colony or incident, template version, results, photos, follow-ups.
+- **Adoptions**: adopter data, consents, cat link, documents.
+- **Documents & Photos**: file metadata, storage path, owner record reference.
+- **Conversations & Messages**: internal chat history.
+- **Notifications**: queue of messages to send in-app or by email.
+- **Reports**: saved report metadata, export logs.
+- **AuditLogs**: track entity changes with user, timestamp, action.
+- **MigrationJobs & ExportJobs**: track data import and export tasks.
+- **Catalogs**: generic key/value tables for statuses, categories, templates.
+
+### 3.2 SQL Schema (PostgreSQL)
+
+```sql
+-- Users and RBAC
+CREATE TABLE users (
+  id UUID PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  language VARCHAR(5) NOT NULL DEFAULT 'es',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE roles (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  description TEXT
+);
+
+CREATE TABLE permissions (
+  id SERIAL PRIMARY KEY,
+  module TEXT NOT NULL,
+  action TEXT NOT NULL,
+  UNIQUE(module, action)
+);
+
+CREATE TABLE role_permissions (
+  role_id INTEGER REFERENCES roles(id),
+  permission_id INTEGER REFERENCES permissions(id),
+  PRIMARY KEY(role_id, permission_id)
+);
+
+CREATE TABLE user_roles (
+  user_id UUID REFERENCES users(id),
+  role_id INTEGER REFERENCES roles(id),
+  PRIMARY KEY(user_id, role_id)
+);
+
+-- Auditing
+CREATE TABLE audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  entity TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  timestamp TIMESTAMPTZ DEFAULT now(),
+  details JSONB
+);
+
+-- Colonies and geospatial
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+CREATE TABLE colonies (
+  id UUID PRIMARY KEY,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  classification TEXT,
+  geom GEOMETRY(POLYGON, 4326) NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE feeding_points (
+  id UUID PRIMARY KEY,
+  colony_id UUID REFERENCES colonies(id),
+  location GEOMETRY(POINT, 4326) NOT NULL,
+  recorded_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Cats and health
+CREATE TABLE cats (
+  id UUID PRIMARY KEY,
+  colony_id UUID REFERENCES colonies(id),
+  sex TEXT,
+  sterilized BOOLEAN DEFAULT false,
+  sterilization_date DATE,
+  microchip TEXT UNIQUE,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE health_records (
+  id UUID PRIMARY KEY,
+  cat_id UUID REFERENCES cats(id),
+  type TEXT NOT NULL,
+  performed_at TIMESTAMPTZ NOT NULL,
+  vet_name TEXT,
+  attachments JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE cer_actions (
+  id UUID PRIMARY KEY,
+  cat_id UUID REFERENCES cats(id),
+  colony_id UUID REFERENCES colonies(id),
+  captured_at TIMESTAMPTZ,
+  sterilized_at TIMESTAMPTZ,
+  returned_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Incidents and inspections
+CREATE TABLE incidents (
+  id UUID PRIMARY KEY,
+  colony_id UUID REFERENCES colonies(id),
+  category TEXT,
+  priority TEXT,
+  location GEOMETRY(POINT, 4326),
+  status TEXT,
+  details JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE inspection_templates (
+  id UUID PRIMARY KEY,
+  name TEXT NOT NULL,
+  schema JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE inspections (
+  id UUID PRIMARY KEY,
+  template_id UUID REFERENCES inspection_templates(id),
+  colony_id UUID REFERENCES colonies(id),
+  incident_id UUID REFERENCES incidents(id),
+  results JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Collaborators and adoptions
+CREATE TABLE collaborators (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  status TEXT,
+  valid_until DATE,
+  credential JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE adoptions (
+  id UUID PRIMARY KEY,
+  cat_id UUID REFERENCES cats(id),
+  adopter_info JSONB,
+  consent JSONB,
+  adopted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Documents, photos, messages, notifications, reports
+CREATE TABLE documents (
+  id UUID PRIMARY KEY,
+  owner_entity TEXT,
+  owner_id UUID,
+  type TEXT,
+  path TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE conversations (
+  id UUID PRIMARY KEY,
+  participants UUID[] NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE messages (
+  id UUID PRIMARY KEY,
+  conversation_id UUID REFERENCES conversations(id),
+  sender_id UUID REFERENCES users(id),
+  content TEXT,
+  sent_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  type TEXT,
+  payload JSONB,
+  delivered BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE reports (
+  id UUID PRIMARY KEY,
+  name TEXT NOT NULL,
+  filters JSONB,
+  format TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE migration_jobs (
+  id UUID PRIMARY KEY,
+  status TEXT,
+  details JSONB,
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+
+CREATE TABLE export_jobs (
+  id UUID PRIMARY KEY,
+  status TEXT,
+  filters JSONB,
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+```  
+
+## 4. API Design and Endpoints
+
+We follow a **RESTful** style using SvelteKit server routes (`+server.ts`) for JSON APIs and form actions (`+page.server.ts`) for HTML form submissions. Key endpoints:
+
+- **Authentication**
+  - POST `/api/auth/login` – user login via Better Auth.
+  - POST `/api/auth/logout` – end session.
+  - POST `/api/auth/refresh` – refresh tokens.
+
+- **Users & RBAC**
+  - GET `/api/users` – list users.
+  - GET `/api/users/:id` – get user details.
+  - POST `/api/users` – create user.
+  - PUT `/api/users/:id` – update user.
+  - DELETE `/api/users/:id` – deactivate user.
+  - GET `/api/roles` – list roles and permissions.
+  - POST `/api/roles` – create or update roles.
+
+- **Colonies**
+  - GET `/api/colonies` – list with filters.
+  - GET `/api/colonies/:id` – details.
+  - POST `/api/colonies` – create.
+  - PUT `/api/colonies/:id` – update.
+  - DELETE `/api/colonies/:id` – soft delete.
+
+- **Feeding Points**
+  - POST `/api/colonies/:id/feeding-points` – add point.
+
+- **Cats**
+  - GET `/api/cats` – list.
+  - GET `/api/cats/:id` – detail.
+  - POST `/api/cats` – create.
+  - PUT `/api/cats/:id` – update.
+  - DELETE `/api/cats/:id` – logical delete.
+
+- **Health Records & CER**
+  - POST `/api/cats/:id/health` – add record.
+  - GET `/api/cats/:id/health` – list.
+  - POST `/api/cer` – log TNR action.
+  - GET `/api/cer` – list with filters.
+
+- **Incidents & Inspections**
+  - GET `/api/incidents` – list.
+  - POST `/api/incidents` – create.
+  - PUT `/api/incidents/:id` – update.
+  - POST `/api/inspections` – create inspection.
+  - GET `/api/inspection-templates` – list templates.
+
+- **Collaborators**
+  - GET `/api/collaborators` – list.
+  - POST `/api/collaborators` – create.
+
+- **Adoptions**
+  - GET `/api/adoptions` – list.
+  - POST `/api/adoptions` – register.
+
+- **Documents & Media**
+  - POST `/api/uploads` – file upload to EU object store.
+
+- **Chat & Notifications**
+  - GET `/api/conversations` – list.
+  - POST `/api/conversations/:id/messages` – send message.
+  - GET `/api/notifications` – list.
+
+- **Reports & Exports**
+  - POST `/api/reports` – define report.
+  - GET `/api/reports/:id/export` – download Excel/PDF.
+
+Each endpoint checks RBAC based on user roles and returns clear error messages (using Zod for validation).
+
+## 5. Hosting Solutions
+
+All components run in the EU to comply with GDPR and PCAP.
+
+- **Database**: Neon (PostgreSQL managed) in an EU region.
+- **Backend & Frontend**: Monolith deployed to Fly.io (multi-region EU) or Cloudflare Pages and a EU-hosted Node service.
+- **Object Storage**: MinIO (or S3-compatible) hosted in the EU for photos, PDFs and other documents.
+- **CDN**: Cloudflare CDN in front of static assets and edge-cached API responses where appropriate.
+
+Benefits:
+
+- **Reliability**: Managed services with SLAs.
+- **Scalability**: Automatic CPU/memory scaling on Fly.io; Neon scales storage.
+- **Cost-effectiveness**: Usage-based pricing, predictable tiers.
+
+## 6. Infrastructure Components
+
+- **Load Balancer**: Built into Fly.io or Cloudflare Load Balancing across multiple instances.
+- **CDN**: Cloudflare for static files and edge caching.
+- **Caching**: In-memory cache (e.g., Redis or Fly.io clusters) for frequent read queries (catalogs, map tiles metadata).
+- **Object Store**: MinIO for user uploads, with cache-control headers on public assets.
+- **GeoJSON Tile Server (optional)**: For large colony layers, pre-tile on a side service to speed map drawing.
+- **CI/CD**: GitHub Actions pipelines for lint/test/build/deploy.
+
+These components work together to minimize latency, handle traffic spikes, and serve content from the nearest location.
+
+## 7. Security Measures
+
+- **Authentication**: Better Auth handles signup, login, password reset, optional 2FA.
+- **Authorization**: Role-Based Access Control (RBAC) with fine-grained permissions per module/action.
+- **Encryption**:
+  - TLS everywhere.
+  - Data at rest encrypted in PostgreSQL and MinIO.
+- **Input Validation**: Zod (or Yup) on server and client to prevent invalid data and injection attacks.
+- **OWASP Protections**: CSRF tokens on form actions, Content Security Policy (CSP), XSS sanitization.
+- **Secrets Management**: Environment variables for keys, no secrets in code.
+- **Environment Separation**: Distinct dev, staging, production environments with restricted access.
+- **Audit Logs**: Immutable log of sensitive actions (exports, role changes, administrative operations) without storing personal data.
+- **GDPR Compliance**: Data minimization, pseudonymization, configurable retention policies, user rights (access, deletion).
+
+## 8. Monitoring and Maintenance
+
+- **Error Tracking**: Sentry captures runtime errors and performance issues.
+- **Metrics & Dashboards**: Prometheus collects API latency, memory/CPU usage; Grafana dashboards visualize trends.
+- **Logs**: Centralized logging via a log aggregator (e.g., Loki or ELK stack) in the EU.
+- **Backups & Recovery**:
+  - Neon automated daily backups and point-in-time recovery (PITR).
+  - MinIO snapshots daily.
+- **Maintenance Strategies**:
+  - Regular dependency updates via automated tools (Dependabot).
+  - Quarterly security reviews and penetration test (proposal).
+  - Scheduled health checks and load tests before major releases.
+
+## 9. Conclusion and Overall Backend Summary
+
+We’ve built a modular monolithic backend using SvelteKit server routes, TypeScript, Neon PostgreSQL, and Better Auth—all hosted in the EU. Key strengths:
+
+- **Scalable & Performant**: SvelteKit’s SSR, CDN caching, and managed database services.
+- **Secure & Compliant**: End-to-end encryption, RBAC, GDPR controls, EU data residency.
+- **Maintainable & Portable**: Clear module boundaries, repository pattern, migration scripts, full data export.
+- **User-Focused**: Fast APIs (<200 ms), mobile-first, and audit trails for transparency.
+
+This backend setup meets the Ayuntamiento’s requirements for reliability, data sovereignty, and extensibility, while keeping the door open for future evolution or decomposition into microservices if demand grows.

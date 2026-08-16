@@ -1,0 +1,94 @@
+---
+description: Apply these rules when making changes to the project
+globs:
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+# App Flow Document
+
+## Onboarding and Sign-In/Sign-Up
+
+When a new user first reaches the application, they land on a public landing page that briefly explains the purpose of the platform for managing urban feline colonies. From this page, the user selects to create an account or sign in. To register, the user provides a valid email address and creates a secure password, then confirms their email by clicking a link sent by the system. The platform uses Better Auth to handle secure sign-up flows and supports optional two-factor authentication for extra security. If a user forgets their password, they can click a “Forgot Password” link, enter their email, receive a recovery link, and set a new password. Once registered or recovered, the user can sign in by entering their email and password, optionally confirming a second factor, and then they are redirected to the main dashboard. To sign out, the user clicks a log out button in the top-right corner of the interface and is returned to the public landing page.
+
+## Main Dashboard or Home Page
+
+After signing in, the user sees the main dashboard. The dashboard header shows the application logo, a language selector for Spanish or Basque, and the user’s profile menu. A side navigation panel lists the modules such as Colonies, Map, Cats, Health, CER, Incidents, Inspections, Collaborators, Adoptions, Messages, Reports and Settings. In the central area, the user sees summary cards and charts that display counts of active colonies, pending incidents, CER program success rate, recent messages, and upcoming inspections. Each summary card can be clicked to navigate directly into the corresponding module page for deeper details.
+
+## Detailed Feature Flows and Page Transitions
+
+### Colonies Flow
+
+When the user clicks on Colonies, the application shows a paginated list of colony records with filters for status and classification. To create a new colony, the user opens a form with fields for the colony name, classification, status, zone, geometry drawn on a map canvas, points of feeding and observational notes. After filling in the details, the user submits the form and sees a confirmation message before the new colony appears in the list with an audit log entry captured automatically. Editing an existing colony brings up the same form populated with current values, and the user can update geometry or notes and save changes. If a colony is logically deleted, it is flagged as inactive but remains in the history.
+
+### Cartography Flow
+
+Selecting the Map module displays an interactive map with toggles for layers such as colony polygons, feeding points, incidents, and sensitive zones. The user can filter each layer by category or date range. To record a new feeding point or incident on a mobile device, the user taps on the map, the GPS coordinates populate automatically, and the user uploads photographs before saving. On desktop, the user may click on the map to open a detail pane for any existing map feature and edit attributes if they have the required permissions. Every change in the map view updates the underlying data model and shows a toast confirmation.
+
+### Cats Flow
+
+In the Cats module, the user sees a search bar and filters for colony, sterilization status, or microchip presence. Clicking on a cat record opens its profile page which displays identifier, colony, photos, sex, sterilization date, microchip number, vaccine records, deworming history, medical acts and any adoption or transfer status. The user can upload new health documents or update vaccination and deworming dates through inline forms. Saving these changes triggers PDF certificate stubs to be generated for each health action, subject to final template confirmation.
+
+### Health Flow
+
+The Health module allows veterinary users to fill in clinical forms for procedures like sterilization or vaccination. The user selects the cat, chooses from configurable procedure types, attaches supporting photos or documents, and signs off on the record. Upon saving, the system generates a provisional PDF certificate with the veterinarian’s details. All health actions are viewable in the cat’s history, and administrators can export certificates for official validation once templates are approved.
+
+### CER Program Flow
+
+The CER section shows a timeline of Trap Neuter Return events with charts of monthly and annual indicators. The user can click to register a new CER action by selecting a cat and colony, entering capture, sterilization and return dates, and saving. The charts update to reflect the new data instantly. Users with configuration privileges can adjust the formulas used to calculate success rates and other indicators, but final formula definitions require confirmation.
+
+### Incidents Flow
+
+In the Incidents module, the user sees a list and a map view of reported incidents. To log a new incident, the user chooses a category, the location populates via GPS or map click, uploads photos, assigns priority and responsible technician, and adds comments. Upon saving, the incident appears in both list and map views with a status indicator. The user can filter incidents by category or status and view historical updates in an activity feed.
+
+### Inspections Flow
+
+Accessing Inspections shows available inspection tasks associated with colonies or incidents. To begin an inspection, the user selects a template from a configurable list, fills in form fields, takes photos on mobile, and attaches any imported PDF form. After saving, the system stores the results, notifies the technical team of follow-up observations, and logs the action in the audit trail.
+
+### Collaborators Flow
+
+The Collaborators page lists all authorized feeders and partner entities. To add a collaborator, the user completes a form with personal details, assigned colonies, and sets expiration dates. The system generates a digital credential showing a QR code, photo and validity period. Collaborators can propose colony changes or incident reports, which then require municipal validation.
+
+### Adoptions Flow
+
+Within the Adoptions section, users see cats available for adoption and adopter applications pending review. The user fills in adopter data, records consents, uploads identity documents, and confirms the match. The cat’s status updates to adopted and the system applies data retention rules. Legal review flags appear if the record requires further validation.
+
+### Communication Flow
+
+The Messages module provides an internal chat and notification center. Users can send messages by profile, colony or zone, choose templates for email or SMS where permitted, and view message history. The push notification infrastructure shows alerts on mobile. Any external channel beyond email is subject to contractual confirmation.
+
+### Reports Flow
+
+Clicking Reports opens a report builder where the user selects a module, filter criteria and period. The user previewed the report with tables and charts, and then exports to Excel or PDF. Downloaded files include user and timestamp metadata. All exports appear in the audit log.
+
+## Settings and Account Management
+
+From the Settings area, the user can update personal information, change password, manage two-factor authentication, and select language preferences. Administrators can also manage role-based access settings by editing role definitions and assigning module-level permissions. Notification preferences for in-app alerts or email updates can be toggled, and users can return to the dashboard at any time by clicking the home icon.
+
+## Error States and Alternate Paths
+
+If a user enters incorrect login credentials, the system displays an inline error message and prompts to reset the password. During data entry, validation messages appear next to invalid fields with clear instructions. If the connection is lost, a banner notifies the user and the application attempts to reconnect. Restricted actions such as unauthorized edits prompt a “permission denied” message and guide the user to request access. All error states include clear call-to-action links to recover normal flow.
+
+## Conclusion and Overall App Journey
+
+A new user begins at the public landing page and signs up with a secure password, then lands on a personalized dashboard with summary data. From there, the user navigates seamlessly between modules to manage colonies, map features, cat records, health procedures, CER data, incidents, inspections, collaborators, adoptions, communications, and reports. Settings and permissions ensure each user sees only what they need. Errors are handled gracefully and audit logs track every significant action. Ultimately, the platform streamlines the daily tasks of field technicians, veterinarians and administrators, providing a clear path from data entry through reporting and archival.
+
+```ascii
++-------------+   Sign Up/Sign In   +-------------+
+| Landing Page|-------------------->|  Login Page |
++------+------+                     +------+------+
+       |                                    |
+       |                                    v
+       |                              +-----+------+
+       |                              | Dashboard  |
+       |                              +-----+------+
+       |                                    |
+       |          +-------------------------+-------------------------+
+       |          |           Modules: Colonies, Map, Cats, etc.      |
+       |          +-------------------------+-------------------------+
+       |                                    |
+       v                                    v
++------+------+                     +-------+-------+
+| Public Info|<--------------------|   Log Out    |
++-------------+                     +---------------+
+```

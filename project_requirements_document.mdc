@@ -1,0 +1,110 @@
+---
+description: Apply these rules when making changes to the project
+globs:
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+# Project Requirements Document (PRD)
+
+## 1. Project Overview
+
+Vitoria-Gasteiz City Council needs a single, web-based platform to manage all aspects of its urban feline colonies (linked to expediente **2026/CO_ASUM/0013**). Right now, data on colonies, individual cats, veterinary interventions (TNR: Trap-Neuter-Return), incidents, inspections and collaborators are scattered across spreadsheets, paper forms and siloed systems. This causes delays, data inconsistencies and poor transparency.
+
+We will build a modular, responsive web app (desktop, tablet, mobile) that centralizes: colony maps, cat census, health records, CER program metrics, incident logging, inspection templates, collaborator credentials, adoptions, communications and automatic reporting. Success means a fully deployable, EU-hosted monolith (2-year contract, plus optional 2-year extension), compliant with GDPR, PCAP and Ayuntamiento pliegos, ready for production (not a prototype).
+
+## 2. In-Scope vs. Out-of-Scope
+
+**In-Scope (First Release):**
+- Core modules: Colonies, Cartography, Cats, Health, CER program, Incidents, Inspections, Collaborators, Adoptions, Communications, Reports & Indicators. [OBLIGATORIO]
+- Authentication & RBAC with at least five *provisional* profiles: Administrator, Technical Staff, Veterinarian, Managing Entity, Collaborator. [OBLIGATORIO] [CONFIRMAR]
+- Responsive, mobile-first UI using SvelteKit server routes/actions. [OBLIGATORIO]
+- PostgreSQL in EU via Neon. [OBLIGATORIO]
+- Better Auth for user management. [OBLIGATORIO]
+- Data migration from the existing system and final data export on contract end. [OBLIGATORIO]
+- Basic wireframes (desktop & mobile) for all major screens. [OBLIGATORIO]
+- English/Spanish/Euskera i18n with externalizable keys. [OBLIGATORIO]
+- GDPR compliance: data minimization, pseudonymization, audit logs, retention policies. [OBLIGATORIO]
+
+**Out-of-Scope (Phase 1):**
+- Native mobile apps (iOS/Android) or offline PWA caching. [CONFIRMAR]
+- Pre-approved design system, colors, typography, logos. These will be replaced when municipal branding guide arrives. [PROPUESTA]
+- Official PDF certificate templates/numeration. Stubs only until legal validation. [CONFIRMAR]
+- Third-party push/SMS/WhatsApp channels until contractual/legal clearance. [CONFIRMAR] [VALIDACIÓN JURÍDICA]
+- SLA definitions, cloud provider certifications (ISO, ENS), or external analytics. [CONFIRMAR]
+- Advanced GIS workflows beyond CRUD, map filtering and basic geolocation. [CONFIRMAR]
+
+## 3. User Flow
+
+A typical user arrives at the login page, authenticates via Better Auth (email + password, 2FA optional). After login, they land on a **Dashboard** showing summary cards (e.g., active colonies, pending incidents, CER success rate). A left-hand navigation panel lists modules: Colonies, Map, Cats, Health, CER, Incidents, Inspections, Collaborators, Adoptions, Messages, Reports and Settings.
+
+From the map view, a field inspector on mobile taps the map to register a new feeding point or incident using automatic GPS capture and optional photo upload. Back at their desk, a municipal technician clicks the **Cats** module to open an individual cat’s record, update its sterilization date, attach a health PDF certificate stub, then marks it as adopted. The user then generates an annual report (Excel/PDF), downloads it, and logs out. Every action is audited.
+
+## 4. Core Features
+
+- **Authentication & RBAC**: Better Auth integration; configurable roles & permissions per module/action. [OBLIGATORIO]
+- **Colonies CRUD**: ID, name, status, classification, location (polygons), feeding points, observations, related cats/incidents/inspections/documents/collaborators, logical deletion. [OBLIGATORIO]
+- **Cartography Module**: Editable map layers (colonies, feeding points, incidents, zones); toggle, filter, view details; mobile geolocation & photo capture. [OBLIGATORIO]
+- **Cat Management**: Individual records (ID, colony link, photo, sex, sterilization, microchip, vaccines, deworming, health history, adoption/retirement/death). Configurable catalogs. [OBLIGATORIO]
+- **Health Records**: Clinical form, procedures (sterilization, microchip, vaccination, deworming), attachments; generate PDF certificate stub. Template details: [CONFIRMAR]. [OBLIGATORIO]
+- **CER Program**: Log trap-sterilize-return events; configurable indicators, charts & historical view. Formula details: [CONFIRMAR]. [OBLIGATORIO]
+- **Incidents**: Create/search incidents with GPS, category, priority, responsible user, photos, documents, status, comments. Configurable catalogs; map & list views. [OBLIGATORIO]
+- **Inspections**: Configurable templates/form-builder for mobile PDF import; photo attachments, results, follow-ups, history. Official forms: [CONFIRMAR]. [OBLIGATORIO]
+- **Collaborators**: Profiles, authorization status, validity, assigned colonies, digital credential (QR, photo, signature stub). Credential fields: [CONFIRMAR]. [OBLIGATORIO]
+- **Adoptions**: Track adoptable cats, status changes, adopter data, consents, documents. Legal specifics: [VALIDACIÓN JURÍDICA]. [OBLIGATORIO]
+- **Communications**: Internal chat; segment notifications by role, colony, zone; configurable templates. Channels beyond email: [CONFIRMAR]. [OBLIGATORIO]
+- **Reporting & Indicators**: Configurable report builder for Excel/PDF; pre-set filters (colony, cat, period, health, CER, incidents, inspections). Official layouts: [CONFIRMAR]. [OBLIGATORIO]
+- **Data Migration & Reversibility**: Scripts to import from current system; full data export at contract end. [OBLIGATORIO]
+- **Audit Logging**: Track create/update/delete/export actions with user, timestamp, entity, result. [OBLIGATORIO]
+
+## 5. Tech Stack & Tools
+
+- **Frontend**: Svelte + SvelteKit ([OBLIGATORIO], PPT §3.1 p.2)
+- **Language**: TypeScript ([OBLIGATORIO])
+- **Backend/DB**: Monolithic modular architecture, Neon (managed PostgreSQL in EU) ([OBLIGATORIO], PCAP)
+- **Authentication**: Better Auth ([OBLIGATORIO])
+- **API**: SvelteKit server routes/actions ([OBLIGATORIO])
+- **ORM**: *Proposal*: Drizzle ORM or Prisma ([PROPUESTA])
+- **Validation**: *Proposal*: Zod or Yup ([PROPUESTA])
+- **UI Components**: *Proposal*: Svelte Material UI or Skeleton ([PROPUESTA])
+- **Maps**: *Proposal*: Leaflet or MapLibre with configurable tile provider ([PROPUESTA])
+- **File Upload**: *Proposal*: Direct to EU object store (e.g., MinIO) ([PROPUESTA])
+- **PDF Generation**: *Proposal*: PDFKit or Puppeteer ([PROPUESTA])
+- **Testing**: Unit (Vitest), Integration, E2E (Playwright), accessibility (axe), i18n tests ([PROPUESTA])
+- **Deployment**: *Proposal*: Fly.io, Cloudflare Pages or self-hosted in EU region ([PROPUESTA])
+- **Observability**: *Proposal*: Sentry for errors, Prometheus + Grafana for metrics ([PROPUESTA])
+- **IDE/Plugins**: VS Code, ESLint, Prettier, GitHub Actions CI. ([PROPUESTA])
+
+## 6. Non-Functional Requirements
+
+- **Performance**: API median response <200ms; initial page load <2s on 3G mobile. [CONFIRMAR]
+- **Scalability**: Support 600+ user accounts, 5+ roles, 100 concurrent mobile sessions. [OBLIGATORIO]
+- **Security**: HTTPS/TLS; encryption at rest for sensitive data; OWASP Top 10 defense; input sanitization; file‐upload scanning. [OBLIGATORIO]
+- **Compliance**: GDPR & Spanish data protection; data residency in EU; no US-hosted services without legal clearance. [OBLIGATORIO] [VALIDACIÓN JURÍDICA]
+- **Usability & Accessibility**: Mobile-first; WCAG 2.1 AA [PROPUESTA] (navigation via keyboard, visible focus, contrast 4.5:1, alt text) [CONFIRMAR]
+- **Internationalization**: Full support for Spanish/Euskera with external keys, no auto-translation. [OBLIGATORIO]
+- **Reliability**: Daily backups with 7-day PITR; multi-AZ DB replication. [PROPUESTA]
+- **Maintainability**: Clean code, modular boundaries, automated tests, linting & formatting. [OBLIGATORIO]
+
+## 7. Constraints & Assumptions
+
+- **Contractual Stack**: Must use Svelte/SvelteKit, TypeScript, Neon, Better Auth; no changes. (PCAP)
+- **No Subcontracting**: All servers, storage and logs in EU; no third-party cloud without explicit contract. [VALIDACIÓN JURÍDICA]
+- **Template Details Pending**: PDF certificates, inspection forms, report layouts, credential formats to be confirmed by Ayuntamiento. [CONFIRMAR]
+- **GIS Provider**: Unspecified—must remain pluggable. [CONFIRMAR]
+- **Data Migration**: Existing export mechanism will be provided. [ASSUMPTION]
+- **User Roles**: Final names & permissions matrix to be validated. [CONFIRMAR]
+- **Browser Support**: Chrome, Edge, Firefox, Safari on Windows, macOS, Linux; responsive to 320px width. [OBLIGATORIO]
+
+## 8. Known Issues & Potential Pitfalls
+
+- **Missing Official Templates**: Certificate, inspection form and report templates are undefined. Mitigation: build configurable template engine, mark fields as [CONFIRMAR].
+- **GIS & Map Tiles**: No provider/license defined; could delay mapping module. Mitigation: abstract map layer, use open-source tiles by default. [CONFIRMAR]
+- **Legal Approval**: Third-party communications, external storage or analytics may violate PCAP. Mitigation: require legal sign-off before integration. [VALIDACIÓN JURÍDICA]
+- **Performance on Mobile**: Large geoJSON layers may slow low-end devices. Mitigation: implement server-side clustering & tile pre‐processing.
+- **PDF Library Limitations**: Generating secure, signed certificates may need specialized tooling. Mitigation: evaluate PDFKit vs. Puppeteer early.
+- **Data Portability**: Future system reversal demands clear DB access layer and export scripts. Mitigation: enforce repository pattern and avoid provider-locked features.
+- **Role/Permission Complexity**: RBAC matrix is large; risk of misconfiguration. Mitigation: auto-generate permission lists from code and include self-service UI.
+
+---
+*End of PRD*
