@@ -13,66 +13,145 @@ import {
 	feedingPoints,
 	auditLogs,
 	userRoles,
-	roles
+	roles,
+	permissions,
+	rolePermissions,
+	catalogs
 } from '$lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
 
-export const POST: RequestHandler = async ({ request, url }) => {
+export const POST: RequestHandler = async ({ url }) => {
 	const secret = url.searchParams.get('key');
 	if (secret !== 'seed-2026-vg') {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	try {
-		const baseUrl = url.origin;
+		// ─── 1. Roles ────────────────────────────────────────────────
+		const roleDefs = [
+			{ name: 'admin', description: 'Administrador municipal - acceso total' },
+			{ name: 'tecnico', description: 'Personal técnico municipal' },
+			{ name: 'veterinario', description: 'Personal veterinario o sanitario autorizado' },
+			{ name: 'entidad_gestora', description: 'Entidad gestora o coordinadora' },
+			{ name: 'colaborador', description: 'Persona colaboradora o alimentadora autorizada' }
+		];
+		const insertedRoles = await db.insert(roles).values(roleDefs).onConflictDoNothing().returning();
+		const allRoles = insertedRoles.length > 0 ? insertedRoles : await db.select().from(roles);
+		const roleMap = new Map(allRoles.map(r => [r.name, r.id]));
 
-		const adminRes = await auth.api.signUpEmail({
-			body: {
-				name: 'Admin VG',
-				email: 'admin@vitoria-gasteiz.org',
-				password: 'Admin2026!'
-			}
-		});
+		// ─── 2. Permissions (module x action matrix) ─────────────────
+		const modules = ['colonias', 'gatos', 'salud', 'cer', 'incidencias', 'inspecciones', 'colaboradores', 'adopciones', 'mensajes', 'informes', 'admin'];
+		const actions = ['view', 'create', 'edit', 'validate', 'close', 'export', 'admin', 'access_personal_data', 'access_health_data', 'access_geo_sensitive'];
 
-		const tecnicoRes = await auth.api.signUpEmail({
-			body: {
-				name: 'María López',
-				email: 'tecnico@vitoria-gasteiz.org',
-				password: 'Tecnico2026!'
-			}
-		});
+		const permValues = modules.flatMap(m => actions.map(a => ({ module: m, action: a })));
+		await db.insert(permissions).values(permValues).onConflictDoNothing();
+		const allPerms = await db.select().from(permissions);
 
-		const vetRes = await auth.api.signUpEmail({
-			body: {
-				name: 'Dr. Iñaki Arteaga',
-				email: 'vet@vitoria-gasteiz.org',
-				password: 'Vet2026!'
-			}
-		});
+		const getPermId = (mod: string, act: string) => allPerms.find(p => p.module === mod && p.action === act)?.id;
+
+		// ─── 3. Assign full permissions to admin ─────────────────────
+		const adminRoleId = roleMap.get('admin')!;
+		const rpValues = allPerms.map(p => ({ roleId: adminRoleId, permissionId: p.id }));
+		await db.insert(rolePermissions).values(rpValues).onConflictDoNothing();
+
+		// Técnico: view + create + edit on most modules, no admin
+		const tecnicoRoleId = roleMap.get('tecnico')!;
+		const tecnicoPerms = allPerms.filter(p =>
+			p.module !== 'admin' && ['view', 'create', 'edit', 'validate', 'close', 'export', 'access_personal_data', 'access_health_data', 'access_geo_sensitive'].includes(p.action)
+		);
+		await db.insert(rolePermissions).values(tecnicoPerms.map(p => ({ roleId: tecnicoRoleId, permissionId: p.id }))).onConflictDoNothing();
+
+		// Veterinario: salud, gatos, cer
+		const vetRoleId = roleMap.get('veterinario')!;
+		const vetPerms = allPerms.filter(p =>
+			['salud', 'gatos', 'cer'].includes(p.module) && ['view', 'create', 'edit', 'access_health_data'].includes(p.action)
+		);
+		await db.insert(rolePermissions).values(vetPerms.map(p => ({ roleId: vetRoleId, permissionId: p.id }))).onConflictDoNothing();
+
+		// Entidad gestora: similar a técnico sin admin ni datos sensibles
+		const gestorRoleId = roleMap.get('entidad_gestora')!;
+		const gestorPerms = allPerms.filter(p =>
+			p.module !== 'admin' && ['view', 'create', 'edit', 'export'].includes(p.action)
+		);
+		await db.insert(rolePermissions).values(gestorPerms.map(p => ({ roleId: gestorRoleId, permissionId: p.id }))).onConflictDoNothing();
+
+		// Colaborador: solo view en colonias asignadas, create incidencias
+		const colabRoleId = roleMap.get('colaborador')!;
+		const colabPerms = allPerms.filter(p =>
+			(p.module === 'colonias' && p.action === 'view') ||
+			(p.module === 'gatos' && p.action === 'view') ||
+			(p.module === 'incidencias' && ['view', 'create'].includes(p.action)) ||
+			(p.module === 'mensajes' && ['view', 'create'].includes(p.action))
+		);
+		await db.insert(rolePermissions).values(colabPerms.map(p => ({ roleId: colabRoleId, permissionId: p.id }))).onConflictDoNothing();
+
+		// ─── 4. Users ────────────────────────────────────────────────
+		const adminRes = await auth.api.signUpEmail({ body: { name: 'Admin VG', email: 'admin@vitoria-gasteiz.org', password: 'Admin2026!' } });
+		const tecnicoRes = await auth.api.signUpEmail({ body: { name: 'María López', email: 'tecnico@vitoria-gasteiz.org', password: 'Tecnico2026!' } });
+		const vetRes = await auth.api.signUpEmail({ body: { name: 'Dr. Iñaki Arteaga', email: 'vet@vitoria-gasteiz.org', password: 'Vet2026!' } });
+		const gestorRes = await auth.api.signUpEmail({ body: { name: 'Asociación Gatalde', email: 'gestor@vitoria-gasteiz.org', password: 'Gestor2026!' } });
+		const colabRes = await auth.api.signUpEmail({ body: { name: 'Ana García', email: 'colaborador@vitoria-gasteiz.org', password: 'Colab2026!' } });
 
 		const adminId = adminRes.user?.id;
 		const tecnicoId = tecnicoRes.user?.id;
 		const vetId = vetRes.user?.id;
+		const gestorId = gestorRes.user?.id;
+		const colabId = colabRes.user?.id;
 
 		if (!adminId || !tecnicoId || !vetId) {
-			return json({ error: 'Failed to create users', details: { adminRes, tecnicoRes, vetRes } }, { status: 500 });
+			return json({ error: 'Failed to create core users' }, { status: 500 });
 		}
 
-		const allRoles = await db.select().from(roles);
-		const adminRole = allRoles.find(r => r.name === 'admin');
-		const tecnicoRole = allRoles.find(r => r.name === 'tecnico');
-		const vetRole = allRoles.find(r => r.name === 'veterinario');
+		await db.insert(userRoles).values([
+			{ userId: adminId, roleId: adminRoleId },
+			{ userId: tecnicoId, roleId: tecnicoRoleId },
+			{ userId: vetId, roleId: vetRoleId },
+			...(gestorId ? [{ userId: gestorId, roleId: gestorRoleId }] : []),
+			...(colabId ? [{ userId: colabId, roleId: colabRoleId }] : [])
+		]).onConflictDoNothing();
 
-		if (adminRole) {
-			await db.insert(userRoles).values({ userId: adminId, roleId: adminRole.id });
-		}
-		if (tecnicoRole) {
-			await db.insert(userRoles).values({ userId: tecnicoId, roleId: tecnicoRole.id });
-		}
-		if (vetRole) {
-			await db.insert(userRoles).values({ userId: vetId, roleId: vetRole.id });
-		}
+		// ─── 5. Catalogs ─────────────────────────────────────────────
+		const catalogData = [
+			{ type: 'colony_status', key: 'active', label: 'Activa', labelEu: 'Aktiboa', sortOrder: 1 },
+			{ type: 'colony_status', key: 'monitoring', label: 'En seguimiento', labelEu: 'Jarraipenean', sortOrder: 2 },
+			{ type: 'colony_status', key: 'inactive', label: 'Inactiva', labelEu: 'Ez-aktiboa', sortOrder: 3 },
+			{ type: 'colony_status', key: 'relocating', label: 'En reubicación', labelEu: 'Birkokatzen', sortOrder: 4 },
+			{ type: 'colony_classification', key: 'park', label: 'Parque urbano', labelEu: 'Hiri-parkea', sortOrder: 1 },
+			{ type: 'colony_classification', key: 'residential', label: 'Zona residencial', labelEu: 'Bizitegi-gunea', sortOrder: 2 },
+			{ type: 'colony_classification', key: 'industrial', label: 'Zona industrial', labelEu: 'Industria-gunea', sortOrder: 3 },
+			{ type: 'colony_classification', key: 'green', label: 'Zona verde', labelEu: 'Gune berdea', sortOrder: 4 },
+			{ type: 'cat_status', key: 'in_colony', label: 'En colonia', labelEu: 'Kolonian', sortOrder: 1 },
+			{ type: 'cat_status', key: 'adopted', label: 'Adoptado', labelEu: 'Adoptatua', sortOrder: 2 },
+			{ type: 'cat_status', key: 'transferred', label: 'Trasladado', labelEu: 'Lekualdatua', sortOrder: 3 },
+			{ type: 'cat_status', key: 'deceased', label: 'Fallecido', labelEu: 'Hildakoa', sortOrder: 4 },
+			{ type: 'cat_status', key: 'lost', label: 'Desaparecido', labelEu: 'Desagertua', sortOrder: 5 },
+			{ type: 'incident_category', key: 'health', label: 'Sanitaria', labelEu: 'Osasuna', sortOrder: 1 },
+			{ type: 'incident_category', key: 'environmental', label: 'Ambiental', labelEu: 'Ingurumena', sortOrder: 2 },
+			{ type: 'incident_category', key: 'complaint', label: 'Queja vecinal', labelEu: 'Auzokoen kexa', sortOrder: 3 },
+			{ type: 'incident_category', key: 'abuse', label: 'Maltrato', labelEu: 'Tratu txarra', sortOrder: 4 },
+			{ type: 'incident_category', key: 'infrastructure', label: 'Infraestructura', labelEu: 'Azpiegitura', sortOrder: 5 },
+			{ type: 'incident_priority', key: 'low', label: 'Baja', labelEu: 'Baxua', sortOrder: 1 },
+			{ type: 'incident_priority', key: 'medium', label: 'Media', labelEu: 'Ertaina', sortOrder: 2 },
+			{ type: 'incident_priority', key: 'high', label: 'Alta', labelEu: 'Altua', sortOrder: 3 },
+			{ type: 'incident_priority', key: 'critical', label: 'Crítica', labelEu: 'Kritikoa', sortOrder: 4 },
+			{ type: 'health_type', key: 'sterilization', label: 'Esterilización', labelEu: 'Esterilizazioa', sortOrder: 1 },
+			{ type: 'health_type', key: 'vaccination', label: 'Vacunación', labelEu: 'Txertaketa', sortOrder: 2 },
+			{ type: 'health_type', key: 'deworming', label: 'Desparasitación', labelEu: 'Desparasitazioa', sortOrder: 3 },
+			{ type: 'health_type', key: 'microchip', label: 'Microchip', labelEu: 'Mikrotxipa', sortOrder: 4 },
+			{ type: 'health_type', key: 'checkup', label: 'Revisión', labelEu: 'Azterketa', sortOrder: 5 },
+			{ type: 'health_type', key: 'surgery', label: 'Cirugía', labelEu: 'Kirurgia', sortOrder: 6 },
+			{ type: 'health_type', key: 'treatment', label: 'Tratamiento', labelEu: 'Tratamendua', sortOrder: 7 },
+			{ type: 'adoption_status', key: 'available', label: 'Disponible', labelEu: 'Eskuragarria', sortOrder: 1 },
+			{ type: 'adoption_status', key: 'pending', label: 'En proceso', labelEu: 'Prozesuan', sortOrder: 2 },
+			{ type: 'adoption_status', key: 'completed', label: 'Completada', labelEu: 'Osatua', sortOrder: 3 },
+			{ type: 'adoption_status', key: 'returned', label: 'Devuelto', labelEu: 'Itzulia', sortOrder: 4 },
+			{ type: 'collaborator_status', key: 'active', label: 'Activo', labelEu: 'Aktiboa', sortOrder: 1 },
+			{ type: 'collaborator_status', key: 'pending', label: 'Pendiente', labelEu: 'Zain', sortOrder: 2 },
+			{ type: 'collaborator_status', key: 'inactive', label: 'Inactivo', labelEu: 'Ez-aktiboa', sortOrder: 3 },
+			{ type: 'collaborator_status', key: 'suspended', label: 'Suspendido', labelEu: 'Etena', sortOrder: 4 }
+		];
+		await db.insert(catalogs).values(catalogData).onConflictDoNothing();
 
+		// ─── 6. Demo Data ────────────────────────────────────────────
 		const colony1Id = crypto.randomUUID();
 		const colony2Id = crypto.randomUUID();
 		const colony3Id = crypto.randomUUID();
@@ -81,7 +160,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 
 		await db.insert(colonies).values([
 			{ id: colony1Id, name: 'Parque de la Florida', status: 'active', classification: 'Parque urbano', district: 'Centro', description: 'Colonia estable en el Parque de la Florida, con alimentadores regulares', latitude: 42.8469, longitude: -2.6727 },
-			{ id: colony2Id, name: 'Judimendi', status: 'active', classification: 'Residencial', district: 'Judimendi', description: 'Colonia en zona residencial de Judimendi, bien gestionada', latitude: 42.8510, longitude: -2.6780 },
+			{ id: colony2Id, name: 'Judimendi', status: 'active', classification: 'Residencial', district: 'Judimendi', description: 'Colonia en zona residencial, bien gestionada', latitude: 42.8510, longitude: -2.6780 },
 			{ id: colony3Id, name: 'Salburua', status: 'active', classification: 'Zona verde', district: 'Salburua', description: 'Colonia en el humedal de Salburua con alto control CER', latitude: 42.8430, longitude: -2.6450 },
 			{ id: colony4Id, name: 'Zaramaga', status: 'monitoring', classification: 'Industrial', district: 'Zaramaga', description: 'Colonia en transición, requiere monitorización', latitude: 42.8600, longitude: -2.6750 },
 			{ id: colony5Id, name: 'Lakua-Arriaga', status: 'active', classification: 'Residencial', district: 'Lakua', description: 'Colonia estable en zona Lakua-Arriaga', latitude: 42.8650, longitude: -2.6800 }
@@ -163,11 +242,13 @@ export const POST: RequestHandler = async ({ request, url }) => {
 
 		return json({
 			success: true,
-			message: 'Database seeded successfully',
+			message: 'Database seeded with roles, permissions, catalogs, users and demo data',
 			credentials: {
-				admin: { email: 'admin@vitoria-gasteiz.org', password: 'Admin2026!' },
-				tecnico: { email: 'tecnico@vitoria-gasteiz.org', password: 'Tecnico2026!' },
-				veterinario: { email: 'vet@vitoria-gasteiz.org', password: 'Vet2026!' }
+				admin: { email: 'admin@vitoria-gasteiz.org', password: 'Admin2026!', role: 'admin' },
+				tecnico: { email: 'tecnico@vitoria-gasteiz.org', password: 'Tecnico2026!', role: 'tecnico' },
+				veterinario: { email: 'vet@vitoria-gasteiz.org', password: 'Vet2026!', role: 'veterinario' },
+				entidad_gestora: { email: 'gestor@vitoria-gasteiz.org', password: 'Gestor2026!', role: 'entidad_gestora' },
+				colaborador: { email: 'colaborador@vitoria-gasteiz.org', password: 'Colab2026!', role: 'colaborador' }
 			}
 		});
 	} catch (error) {

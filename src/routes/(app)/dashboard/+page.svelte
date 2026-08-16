@@ -122,6 +122,18 @@
 					<a href="/informes" class="bg-gray-50 border border-gray-200 rounded-md p-4 text-center hover:bg-gray-100 transition-colors text-sm font-medium">
 						📋 {t(locale, 'dashboard.generate_report')}
 					</a>
+					<a href="/salud" class="bg-gray-50 border border-gray-200 rounded-md p-4 text-center hover:bg-gray-100 transition-colors text-sm font-medium">
+						💊 Salud Animal
+					</a>
+					<a href="/cer" class="bg-gray-50 border border-gray-200 rounded-md p-4 text-center hover:bg-gray-100 transition-colors text-sm font-medium">
+						✂️ Programa CER
+					</a>
+					<a href="/inspecciones" class="bg-gray-50 border border-gray-200 rounded-md p-4 text-center hover:bg-gray-100 transition-colors text-sm font-medium">
+						📋 Inspecciones
+					</a>
+					<a href="/adopciones" class="bg-gray-50 border border-gray-200 rounded-md p-4 text-center hover:bg-gray-100 transition-colors text-sm font-medium">
+						🏠 Adopciones
+					</a>
 				</div>
 			</div>
 

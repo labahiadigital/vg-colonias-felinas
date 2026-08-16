@@ -53,13 +53,24 @@
 			<h2 class="text-2xl font-bold text-gray-800">{t(locale, 'reports.title')}</h2>
 			<p class="text-sm text-gray-500 mt-1">Indicadores y estadísticas del programa</p>
 		</div>
-		<div class="flex gap-2">
-			<button onclick={exportCSV} class="px-4 py-2 bg-accent text-white font-semibold rounded-md hover:bg-green-700 transition-colors text-sm">
-				📥 {t(locale, 'reports.export_excel')}
+		<div class="flex flex-wrap gap-2">
+			<button onclick={exportCSV} class="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition-colors text-sm">
+				📥 Resumen CSV
 			</button>
 			<a href="/api/export-pdf?type=general" target="_blank" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 transition-colors text-sm inline-flex items-center">
-				📄 {t(locale, 'reports.export_pdf')}
+				📄 Informe PDF
 			</a>
+			<div class="relative group">
+				<button class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 text-sm">📊 Exportar datos</button>
+				<div class="hidden group-hover:block absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg z-10 min-w-[180px]">
+					<a href="/api/export-excel?type=colonies" class="block px-4 py-2 text-sm hover:bg-gray-50">Colonias</a>
+					<a href="/api/export-excel?type=cats" class="block px-4 py-2 text-sm hover:bg-gray-50">Gatos</a>
+					<a href="/api/export-excel?type=incidents" class="block px-4 py-2 text-sm hover:bg-gray-50">Incidencias</a>
+					<a href="/api/export-excel?type=cer" class="block px-4 py-2 text-sm hover:bg-gray-50">Acciones CER</a>
+					<a href="/api/export-excel?type=health" class="block px-4 py-2 text-sm hover:bg-gray-50">Salud</a>
+					<a href="/api/export-excel?type=collaborators" class="block px-4 py-2 text-sm hover:bg-gray-50">Colaboradores</a>
+				</div>
+			</div>
 		</div>
 	</div>
 

@@ -126,8 +126,8 @@
 					{/if}
 				</div>
 
-				{#if col.status === 'pending'}
-					<div class="flex gap-2">
+				<div class="flex gap-2">
+					{#if col.status === 'pending'}
 						<form method="POST" action="?/updateStatus" use:enhance class="flex-1">
 							<input type="hidden" name="id" value={col.id} />
 							<input type="hidden" name="status" value="active" />
@@ -138,8 +138,9 @@
 							<input type="hidden" name="status" value="inactive" />
 							<button type="submit" class="w-full px-3 py-1.5 bg-red-100 text-red-700 rounded text-xs font-semibold hover:bg-red-200">Rechazar</button>
 						</form>
-					</div>
-				{/if}
+					{/if}
+					<a href="/colaboradores/{col.id}" class="flex-1 px-3 py-1.5 bg-primary/10 text-primary rounded text-xs font-semibold hover:bg-primary/20 text-center">Ver ficha</a>
+				</div>
 			</div>
 		{:else}
 			<div class="col-span-full text-center py-12 text-gray-400">No se encontraron colaboradores.</div>

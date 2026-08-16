@@ -1,21 +1,74 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { users, userRoles, roles } from '$lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
-import { fail } from '@sveltejs/kit';
+import { users, userRoles, roles, permissions, rolePermissions, catalogs, auditLogs } from '$lib/server/db/schema.js';
+import { eq, desc, asc } from 'drizzle-orm';
+import { fail, redirect } from '@sveltejs/kit';
+import { hasPermission } from '$lib/server/rbac.js';
+import { logAudit } from '$lib/server/audit.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) return { locale: locals.locale, user: null, userRole: null };
+	if (!locals.user) throw redirect(302, '/login');
 
 	const roleRows = await db.select({ roleName: roles.name })
 		.from(userRoles)
 		.innerJoin(roles, eq(userRoles.roleId, roles.id))
 		.where(eq(userRoles.userId, locals.user.id));
 
+	const currentRole = roleRows[0]?.roleName ?? null;
+	const isAdmin = currentRole === 'admin';
+
+	let allUsers: Array<{ id: string; name: string; email: string; createdAt: Date | null; roleName: string | null }> = [];
+	let allRoles: Array<{ id: number; name: string; description: string | null }> = [];
+	let allPermissions: Array<{ id: number; module: string; action: string }> = [];
+	let allRolePermissions: Array<{ roleId: number; permissionId: number }> = [];
+	let allCatalogs: Array<{ id: string; type: string; key: string; label: string; labelEu: string | null; sortOrder: number | null; isActive: boolean | null }> = [];
+
+	if (isAdmin) {
+		const usersWithRoles = await db
+			.select({
+				id: users.id,
+				name: users.name,
+				email: users.email,
+				createdAt: users.createdAt,
+				roleName: roles.name
+			})
+			.from(users)
+			.leftJoin(userRoles, eq(users.id, userRoles.userId))
+			.leftJoin(roles, eq(userRoles.roleId, roles.id))
+			.orderBy(asc(users.name));
+		allUsers = usersWithRoles;
+
+		allRoles = await db.select().from(roles).orderBy(asc(roles.name));
+		allPermissions = await db.select().from(permissions).orderBy(asc(permissions.module), asc(permissions.action));
+		allRolePermissions = await db.select().from(rolePermissions);
+		allCatalogs = await db.select().from(catalogs).orderBy(asc(catalogs.type), asc(catalogs.sortOrder));
+	}
+
+	const recentAudit = await db
+		.select({
+			id: auditLogs.id,
+			entity: auditLogs.entity,
+			action: auditLogs.action,
+			details: auditLogs.details,
+			createdAt: auditLogs.createdAt,
+			userName: users.name
+		})
+		.from(auditLogs)
+		.leftJoin(users, eq(auditLogs.userId, users.id))
+		.orderBy(desc(auditLogs.createdAt))
+		.limit(20);
+
 	return {
 		locale: locals.locale,
 		user: locals.user,
-		userRole: roleRows[0]?.roleName ?? null
+		userRole: currentRole,
+		isAdmin,
+		allUsers,
+		allRoles,
+		allPermissions,
+		allRolePermissions,
+		allCatalogs,
+		auditLog: recentAudit
 	};
 };
 
@@ -34,6 +87,81 @@ export const actions: Actions = {
 			updatedAt: new Date()
 		}).where(eq(users.id, locals.user.id));
 
+		await logAudit({ userId: locals.user.id, entity: 'user', entityId: locals.user.id, action: 'update_profile' });
 		return { success: true };
+	},
+
+	assignRole: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const userId = fd.get('userId') as string;
+		const roleId = Number(fd.get('roleId'));
+
+		if (!userId || !roleId) return fail(400, { error: 'Datos incompletos' });
+
+		await db.delete(userRoles).where(eq(userRoles.userId, userId));
+		await db.insert(userRoles).values({ userId, roleId });
+
+		await logAudit({ userId: locals.user.id, entity: 'user_role', entityId: userId, action: 'assign_role', details: { roleId } });
+		return { roleSuccess: true };
+	},
+
+	createRole: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const name = fd.get('name') as string;
+		const description = fd.get('description') as string;
+
+		if (!name) return fail(400, { error: 'Nombre de rol obligatorio' });
+
+		await db.insert(roles).values({ name: name.toLowerCase(), description: description || null });
+		await logAudit({ userId: locals.user.id, entity: 'role', entityId: name, action: 'create' });
+		return { roleCreated: true };
+	},
+
+	togglePermission: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const roleId = Number(fd.get('roleId'));
+		const permissionId = Number(fd.get('permissionId'));
+		const action = fd.get('action') as string;
+
+		if (action === 'add') {
+			await db.insert(rolePermissions).values({ roleId, permissionId });
+		} else {
+			await db.delete(rolePermissions)
+				.where(eq(rolePermissions.roleId, roleId));
+		}
+
+		return { permUpdated: true };
+	},
+
+	createCatalog: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const type = fd.get('type') as string;
+		const key = fd.get('key') as string;
+		const label = fd.get('label') as string;
+		const labelEu = fd.get('labelEu') as string;
+
+		if (!type || !key || !label) return fail(400, { error: 'Tipo, clave y etiqueta son obligatorios' });
+
+		await db.insert(catalogs).values({
+			type,
+			key,
+			label,
+			labelEu: labelEu || null
+		});
+
+		await logAudit({ userId: locals.user.id, entity: 'catalog', entityId: key, action: 'create', details: { type, label } });
+		return { catalogCreated: true };
 	}
 };
