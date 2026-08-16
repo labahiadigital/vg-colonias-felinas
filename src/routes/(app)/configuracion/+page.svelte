@@ -8,19 +8,20 @@
 	let user = $derived(data.user);
 
 	let activeSection = $state('profile');
+	let isAdmin = $derived(data.isAdmin);
 
-	const sections = [
+	let sections = $derived([
 		{ id: 'profile', label: 'Mi Perfil', icon: '👤' },
 		{ id: 'preferences', label: 'Preferencias', icon: '⚙️' },
 		{ id: 'security', label: 'Seguridad', icon: '🔒' },
-		...(data.isAdmin ? [
+		...(isAdmin ? [
 			{ id: 'users', label: 'Usuarios', icon: '👥' },
 			{ id: 'roles', label: 'Roles y Permisos', icon: '🔑' },
 			{ id: 'catalogs', label: 'Catálogos', icon: '📋' },
 			{ id: 'audit', label: 'Auditoría', icon: '📜' }
 		] : []),
 		{ id: 'about', label: 'Acerca de', icon: 'ℹ️' }
-	];
+	]);
 
 	const catalogTypes = [
 		{ value: 'colony_status', label: 'Estado de colonia' },
@@ -135,7 +136,7 @@
 			{/if}
 
 			<!-- Users (Admin only) -->
-			{#if activeSection === 'users' && data.isAdmin}
+			{#if activeSection === 'users' && isAdmin}
 				<div class="bg-white rounded-lg shadow-sm p-6">
 					<h3 class="text-lg font-bold text-gray-800 mb-4">Gestión de Usuarios ({data.allUsers.length})</h3>
 					{#if form?.roleSuccess}<div class="bg-green-50 text-green-800 text-sm p-3 rounded-md mb-4">Rol asignado correctamente.</div>{/if}
@@ -178,7 +179,7 @@
 			{/if}
 
 			<!-- Roles & Permissions (Admin only) -->
-			{#if activeSection === 'roles' && data.isAdmin}
+			{#if activeSection === 'roles' && isAdmin}
 				<div class="space-y-6">
 					<div class="bg-white rounded-lg shadow-sm p-6">
 						<div class="flex items-center justify-between mb-4">
@@ -253,7 +254,7 @@
 			{/if}
 
 			<!-- Catalogs (Admin only) -->
-			{#if activeSection === 'catalogs' && data.isAdmin}
+			{#if activeSection === 'catalogs' && isAdmin}
 				<div class="bg-white rounded-lg shadow-sm p-6">
 					<h3 class="text-lg font-bold text-gray-800 mb-4">Catálogos Configurables</h3>
 					<p class="text-xs text-gray-500 mb-4">Estados, categorías y templates del sistema. Estos valores configurables permiten adaptar la aplicación sin modificar código.</p>
@@ -317,7 +318,7 @@
 			{/if}
 
 			<!-- Audit Log (Admin only) -->
-			{#if activeSection === 'audit' && data.isAdmin}
+			{#if activeSection === 'audit' && isAdmin}
 				<div class="bg-white rounded-lg shadow-sm p-6">
 					<h3 class="text-lg font-bold text-gray-800 mb-4">Registro de Auditoría (últimos 20)</h3>
 					{#if data.auditLog && data.auditLog.length > 0}

@@ -140,8 +140,8 @@
 					</div>
 					<div>
 						<label for="fields" class="block text-sm font-semibold mb-1">Campos (JSON array)</label>
-						<textarea name="fields" id="fields" rows="4" placeholder='[{"name":"estado_general","type":"select","options":["bueno","regular","malo"]},{"name":"observaciones","type":"text"}]'
-							class="w-full px-3 py-2 border rounded-md text-sm font-mono"></textarea>
+					<textarea name="fields" id="fields" rows="4" placeholder="Ej: estado_general:select:bueno,regular,malo | observaciones:text"
+						class="w-full px-3 py-2 border rounded-md text-sm font-mono"></textarea>
 					</div>
 					<button type="submit" class="px-5 py-2 bg-primary text-white rounded-md font-semibold hover:bg-primary-dark w-fit">{t(locale, 'common.save')}</button>
 				</form>

@@ -160,9 +160,8 @@
 								<td class="px-4 py-3 font-medium">
 									<a href="/gatos/{a.catId}" class="text-primary hover:underline">{a.catName || 'Sin nombre'}</a>
 								</td>
-								<td class="px-4 py-3 text-gray-600">{a.colonyName || '-'}</td>
-								{@const status = statusLabel(a)}
-								<td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-bold {status.bg}">{status.label}</span></td>
+							<td class="px-4 py-3 text-gray-600">{a.colonyName || '-'}</td>
+							<td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-bold {statusLabel(a).bg}">{statusLabel(a).label}</span></td>
 								<td class="px-4 py-3 text-gray-600">{a.capturedAt ? new Date(a.capturedAt).toLocaleDateString('es-ES') : '-'}</td>
 								<td class="px-4 py-3 text-gray-600">{a.sterilizedAt ? new Date(a.sterilizedAt).toLocaleDateString('es-ES') : '-'}</td>
 								<td class="px-4 py-3 text-gray-600">{a.returnedAt ? new Date(a.returnedAt).toLocaleDateString('es-ES') : '-'}</td>

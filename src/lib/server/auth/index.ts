@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { db } from '../db/index.js';
@@ -26,7 +27,7 @@ export const auth = betterAuth({
 	},
 	advanced: {
 		database: {
-			generateId: "uuid"
+			generateId: () => randomUUID()
 		}
 	}
 });

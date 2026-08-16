@@ -46,8 +46,7 @@
 						<p class="text-sm text-gray-500">{col.documentId ?? 'Sin documento registrado'}</p>
 					</div>
 				</div>
-				{@const badge = statusBadge(col.status)}
-				<span class="px-3 py-1 rounded-full text-sm font-bold {badge.bg}">{badge.label}</span>
+			<span class="px-3 py-1 rounded-full text-sm font-bold {statusBadge(col.status).bg}">{statusBadge(col.status).label}</span>
 			</div>
 
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
