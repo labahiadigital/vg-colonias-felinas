@@ -50,28 +50,32 @@
 
 <div class="space-y-2">
 	<label class="block">
-		<span class="text-sm font-semibold text-gray-700">{label}</span>
+		<span class="text-sm font-medium text-text-secondary">{label}</span>
 		<input
 			type="file"
 			{accept}
 			onchange={handleFile}
 			disabled={uploading}
-			class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 disabled:opacity-50"
+			class="mt-1.5 block w-full text-sm text-text-muted file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary/8 file:text-primary hover:file:bg-primary/12 file:transition-colors disabled:opacity-50"
 			capture="environment"
 		/>
 	</label>
 
 	{#if uploading}
-		<p class="text-xs text-blue-600 animate-pulse">Subiendo archivo...</p>
+		<div class="flex items-center gap-2 text-xs text-primary">
+			<svg class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.2"/><path d="M12 2a10 10 0 019.95 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+			Subiendo archivo...
+		</div>
 	{/if}
 	{#if error}
-		<p class="text-xs text-red-600">{error}</p>
+		<p class="text-xs text-danger">{error}</p>
 	{/if}
 	{#if uploadedFile}
-		<div class="flex items-center gap-2 text-xs text-green-700 bg-green-50 p-2 rounded">
-			<span>Subido: {uploadedFile.filename}</span>
+		<div class="flex items-center gap-2 text-xs text-success bg-success-subtle p-2 rounded-lg border border-success/10">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 flex-shrink-0"><polyline points="20,6 9,17 4,12"/></svg>
+			<span class="truncate">{uploadedFile.filename}</span>
 			{#if uploadedFile.path.match(/\.(jpg|jpeg|png|webp|gif)$/i)}
-				<img src={uploadedFile.path} alt="Preview" class="w-16 h-16 object-cover rounded" />
+				<img src={uploadedFile.path} alt="Preview" class="w-10 h-10 object-cover rounded-md flex-shrink-0 ml-auto" />
 			{/if}
 		</div>
 	{/if}

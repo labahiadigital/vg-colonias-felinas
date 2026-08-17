@@ -50,12 +50,16 @@ From the map view, a field inspector on mobile taps the map to register a new fe
 - **CER Program**: Log trap-sterilize-return events; configurable indicators, charts & historical view. Formula details: [CONFIRMAR]. [OBLIGATORIO]
 - **Incidents**: Create/search incidents with GPS, category, priority, responsible user, photos, documents, status, comments. Configurable catalogs; map & list views. [OBLIGATORIO]
 - **Inspections**: Configurable templates/form-builder for mobile PDF import; photo attachments, results, follow-ups, history. Official forms: [CONFIRMAR]. [OBLIGATORIO]
-- **Collaborators**: Profiles, authorization status, validity, assigned colonies, digital credential (QR, photo, signature stub). Credential fields: [CONFIRMAR]. [OBLIGATORIO]
+- **Collaborators**: Profiles, authorization status, validity, assigned colonies, digital credential profesional con QR real y URL de verificación pública. [OBLIGATORIO]
 - **Adoptions**: Track adoptable cats, status changes, adopter data, consents, documents. Legal specifics: [VALIDACIÓN JURÍDICA]. [OBLIGATORIO]
-- **Communications**: Internal chat; segment notifications by role, colony, zone; configurable templates. Channels beyond email: [CONFIRMAR]. [OBLIGATORIO]
-- **Reporting & Indicators**: Configurable report builder for Excel/PDF; pre-set filters (colony, cat, period, health, CER, incidents, inspections). Official layouts: [CONFIRMAR]. [OBLIGATORIO]
+- **Communications**: Internal chat con grupos por colonia, zona y rol; avisos generales; segment notifications by role, colony, zone; configurable templates. [OBLIGATORIO]
+- **Visits & Activities**: Registro de visitas con geolocalización, seguimiento de horas de voluntariado, tipos de actividad (alimentación, censo, salud, limpieza). [OBLIGATORIO]
+- **Providers**: Gestión de proveedores (veterinarios, clínicas, servicios), registro de intervenciones con costes. [OBLIGATORIO]
+- **Reporting & Indicators**: Report builder para Excel/PDF; generador automático de memorias de subvención DGDA; informes anuales; cumplimiento normativo Ley 7/2023. [OBLIGATORIO]
+- **Inspections - Scoring**: Puntuación ponderada configurable con evaluación automática aprobado/no aprobado, seguimiento de inspecciones fallidas. [OBLIGATORIO]
 - **Data Migration & Reversibility**: Scripts to import from current system; full data export at contract end. [OBLIGATORIO]
 - **Audit Logging**: Track create/update/delete/export actions with user, timestamp, entity, result. [OBLIGATORIO]
+- **i18n**: Soporte multilingüe: Castellano (es), Euskera (eu), Català (ca), English (en). [OBLIGATORIO]
 
 ## 5. Tech Stack & Tools
 

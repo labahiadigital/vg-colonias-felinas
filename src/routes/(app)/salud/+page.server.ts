@@ -92,5 +92,52 @@ export const actions: Actions = {
 		});
 
 		return { success: true };
+	},
+
+	edit: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/login');
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		const type = fd.get('type') as string;
+		const performedAt = fd.get('performedAt') as string;
+		const vetName = fd.get('vetName') as string;
+		const vetClinic = fd.get('vetClinic') as string;
+		const notes = fd.get('notes') as string;
+
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		await db.update(healthRecords).set({
+			...(type && { type }),
+			...(performedAt && { performedAt: new Date(performedAt) }),
+			vetName: vetName || null,
+			vetClinic: vetClinic || null,
+			notes: notes || null
+		}).where(eq(healthRecords.id, id));
+
+		await db.insert(auditLogs).values({
+			userId: locals.user.id,
+			entity: 'health_record',
+			entityId: id,
+			action: 'update',
+			details: { type }
+		});
+		return { edited: true };
+	},
+
+	delete: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/login');
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		await db.delete(healthRecords).where(eq(healthRecords.id, id));
+		await db.insert(auditLogs).values({
+			userId: locals.user.id,
+			entity: 'health_record',
+			entityId: id,
+			action: 'delete',
+			details: {}
+		});
+		return { deleted: true };
 	}
 };

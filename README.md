@@ -1,4 +1,4 @@
-# Gestión de Colonias Felinas Urbanas — SaaS Multi-tenant
+# Gatopolis — Donde cada gato cuenta
 
 Plataforma SaaS responsive para la gestión integral de colonias felinas urbanas, diseñada para ayuntamientos, diputaciones, asociaciones protectoras y entidades gestoras.
 

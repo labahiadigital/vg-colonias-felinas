@@ -69,7 +69,7 @@ function buildHtml(valid: boolean, data: { name: string; validUntil: string | nu
 		<div class="badge">${data.status === 'active' ? 'Activo/a' : data.status === 'suspended' ? 'Suspendido/a' : data.status}</div>
 		${data.orgName ? `<p class="org">${data.orgName}</p>` : ''}
 	` : `<p class="info">El código de verificación no corresponde a ninguna credencial registrada.</p>`}
-	<p class="org" style="margin-top:24px;font-size:11px">Gestión de Colonias Felinas</p>
+	<p class="org" style="margin-top:24px;font-size:11px">Gatopolis — Gestión de Colonias Felinas</p>
 </div>
 </body>
 </html>`;

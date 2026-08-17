@@ -21,7 +21,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	let allRoles: Array<{ id: number; name: string; description: string | null }> = [];
 	let allPermissions: Array<{ id: number; module: string; action: string }> = [];
 	let allRolePermissions: Array<{ roleId: number; permissionId: number }> = [];
-	let allCatalogs: Array<{ id: string; type: string; key: string; label: string; labelEu: string | null; sortOrder: number | null; isActive: boolean | null }> = [];
+	let allCatalogs: Array<{ id: string; type: string; key: string; label: string; labelEu: string | null; labelCa: string | null; labelEn: string | null; sortOrder: number | null; isActive: boolean | null }> = [];
 
 	if (isAdmin) {
 		const usersWithRoles = await db
@@ -168,6 +168,8 @@ export const actions: Actions = {
 		const key = fd.get('key') as string;
 		const label = fd.get('label') as string;
 		const labelEu = fd.get('labelEu') as string;
+		const labelCa = fd.get('labelCa') as string;
+		const labelEn = fd.get('labelEn') as string;
 
 		if (!type || !key || !label) return fail(400, { error: 'Tipo, clave y etiqueta son obligatorios' });
 
@@ -175,11 +177,50 @@ export const actions: Actions = {
 			type,
 			key,
 			label,
-			labelEu: labelEu || null
+			labelEu: labelEu || null,
+			labelCa: labelCa || null,
+			labelEn: labelEn || null
 		});
 
 		await logAudit({ userId: locals.user.id, entity: 'catalog', entityId: key, action: 'create', details: { type, label } });
 		return { catalogCreated: true };
+	},
+
+	editCatalog: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		const label = fd.get('label') as string;
+		const labelEu = fd.get('labelEu') as string;
+		const labelCa = fd.get('labelCa') as string;
+		const labelEn = fd.get('labelEn') as string;
+
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		await db.update(catalogs).set({
+			...(label && { label }),
+			labelEu: labelEu || null,
+			labelCa: labelCa || null,
+			labelEn: labelEn || null
+		}).where(eq(catalogs.id, id));
+
+		await logAudit({ userId: locals.user.id, entity: 'catalog', entityId: id, action: 'update', details: { label } });
+		return { catalogEdited: true };
+	},
+
+	deleteCatalog: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		await db.delete(catalogs).where(eq(catalogs.id, id));
+		await logAudit({ userId: locals.user.id, entity: 'catalog', entityId: id, action: 'delete', details: {} });
+		return { catalogDeleted: true };
 	},
 
 	createInspectionTemplate: async ({ request, locals }) => {

@@ -17,6 +17,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			results: inspections.results,
 			photos: inspections.photos,
 			notes: inspections.notes,
+			score: inspections.score,
+			passed: inspections.passed,
+			followUpRequired: inspections.followUpRequired,
+			followUpDate: inspections.followUpDate,
 			createdAt: inspections.createdAt
 		})
 		.from(inspections)
@@ -50,6 +54,8 @@ export const actions: Actions = {
 		const colonyId = fd.get('colonyId') as string;
 		const notes = fd.get('notes') as string;
 		const resultsRaw = fd.get('results') as string;
+		const scoreRaw = fd.get('score') as string;
+		const passedRaw = fd.get('passed') as string;
 
 		if (!colonyId) {
 			return fail(400, { error: 'Colonia es obligatoria' });
@@ -60,12 +66,20 @@ export const actions: Actions = {
 			try { results = JSON.parse(resultsRaw); } catch { results = { raw: resultsRaw }; }
 		}
 
+		const score = scoreRaw ? parseInt(scoreRaw, 10) : null;
+		const passed = passedRaw === 'true' ? true : passedRaw === 'false' ? false : null;
+		const followUpRequired = passed === false;
+
 		const [inspection] = await db.insert(inspections).values({
 			templateId: templateId || null,
 			colonyId,
 			inspectorId: locals.user.id,
 			results,
-			notes: notes || null
+			notes: notes || null,
+			score,
+			passed,
+			followUpRequired,
+			followUpDate: followUpRequired ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null
 		}).returning();
 
 		await db.insert(auditLogs).values({
@@ -94,5 +108,54 @@ export const actions: Actions = {
 
 		await db.insert(inspectionTemplates).values({ name, schema });
 		return { templateSuccess: true };
+	},
+
+	edit: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/login');
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		const colonyId = fd.get('colonyId') as string;
+		const notes = fd.get('notes') as string;
+		const scoreRaw = fd.get('score') as string;
+		const passedRaw = fd.get('passed') as string;
+
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		const score = scoreRaw ? parseInt(scoreRaw, 10) : undefined;
+		const passed = passedRaw === 'true' ? true : passedRaw === 'false' ? false : undefined;
+
+		await db.update(inspections).set({
+			...(colonyId && { colonyId }),
+			notes: notes || null,
+			...(score !== undefined && { score }),
+			...(passed !== undefined && { passed }),
+			followUpRequired: passed === false
+		}).where(eq(inspections.id, id));
+
+		await db.insert(auditLogs).values({
+			userId: locals.user.id,
+			entity: 'inspection',
+			entityId: id,
+			action: 'update',
+			details: { colonyId, score }
+		});
+		return { edited: true };
+	},
+
+	delete: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/login');
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		await db.delete(inspections).where(eq(inspections.id, id));
+		await db.insert(auditLogs).values({
+			userId: locals.user.id,
+			entity: 'inspection',
+			entityId: id,
+			action: 'delete',
+			details: {}
+		});
+		return { deleted: true };
 	}
 };

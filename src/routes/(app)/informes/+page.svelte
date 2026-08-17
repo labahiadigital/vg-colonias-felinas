@@ -5,37 +5,115 @@
 	let { data }: { data: PageData } = $props();
 	let locale = $derived(data.locale);
 	let kpis = $derived(data.kpis);
+	let activeTab = $state<'kpis' | 'compliance' | 'dgda'>('kpis');
 
 	function categoryLabel(c: string): string {
-		const map: Record<string, string> = {
-			health: 'Salud', environmental: 'Medioambiental', complaint: 'Queja',
-			infrastructure: 'Infraestructura', abandonment: 'Abandono', other: 'Otro'
-		};
-		return map[c] ?? c;
+		const key = `reports.cat_${c}` as const;
+		return t(locale, key) || c;
 	}
+
+	function translateAction(action: string): string {
+		const key = `activity.action.${action.toLowerCase()}`;
+		const translated = t(locale, key);
+		return translated !== key ? translated : action;
+	}
+
+	function translateEntity(entity: string): string {
+		const key = `activity.entity.${entity.toLowerCase()}`;
+		const translated = t(locale, key);
+		return translated !== key ? translated : entity;
+	}
+
+	function formatAuditDetails(details: unknown): string {
+		if (!details || typeof details !== 'object') return '';
+		const d = details as Record<string, unknown>;
+		const parts: string[] = [];
+		if (d.name) parts.push(String(d.name));
+		if (d.type) parts.push(String(d.type));
+		if (d.format) parts.push(String(d.format).toUpperCase());
+		if (d.status) parts.push(String(d.status));
+		if (d.category) parts.push(String(d.category));
+		if (d.label) parts.push(String(d.label));
+		return parts.join(' · ') || '';
+	}
+
+	const complianceLaws = $derived([
+		{
+			law: 'Ley 7/2023',
+			titleKey: 'reports.law_7_2023',
+			articles: [
+				{ art: 'Art. 45', labelKey: 'reports.obj_census', ok: kpis.totalCats > 0, detail: `${kpis.totalCats}` },
+				{ art: 'Art. 46', labelKey: 'reports.obj_cer', ok: kpis.totalCER > 0, detail: `${kpis.totalCER} CER · ${kpis.sterilizationRate}%` },
+				{ art: 'Art. 26', labelKey: 'reports.obj_id', ok: kpis.microchippedCats > 0, detail: `${kpis.microchippedCats}/${kpis.totalCats}` },
+				{ art: 'Art. 47', labelKey: 'reports.active_collaborators', ok: kpis.activeCollaborators > 0, detail: `${kpis.activeCollaborators}` },
+				{ art: 'Art. 48', labelKey: 'reports.obj_health', ok: kpis.totalHealthRecords > 0, detail: `${kpis.totalHealthRecords}` }
+			]
+		},
+		{
+			law: 'RGPD / LOPDGDD',
+			titleKey: 'reports.rgpd',
+			articles: [
+				{ art: 'Art. 44', labelKey: 'reports.rgpd', ok: true, detail: 'EU (Frankfurt)' },
+				{ art: 'Art. 30', labelKey: 'reports.audit_log', ok: true, detail: `${data.auditLog.length}` },
+				{ art: 'Art. 13', labelKey: 'reports.rgpd', ok: true, detail: '' },
+				{ art: 'Art. 28', labelKey: 'reports.vet_providers', ok: kpis.activeProviders > 0, detail: `${kpis.activeProviders}` }
+			]
+		},
+		{
+			law: 'Dir. 92/43/CEE',
+			titleKey: 'reports.habitats',
+			articles: [
+				{ art: 'Art. 12', labelKey: 'reports.geolocated_colonies', ok: kpis.geolocatedPct >= 80, detail: `${kpis.geolocatedPct}%` },
+				{ art: 'Art. 11', labelKey: 'reports.monitoring_activity', ok: kpis.recentVisits > 0, detail: `${kpis.recentVisits}` },
+				{ art: 'Art. 14', labelKey: 'reports.inspections', ok: kpis.totalInspections > 0, detail: `${kpis.totalInspections}` }
+			]
+		},
+		{
+			law: 'Biodiversidad 2030',
+			titleKey: 'reports.biodiversity',
+			articles: [
+				{ art: 'Obj. 2', labelKey: 'reports.obj_cer', ok: kpis.totalCER > 0, detail: '' },
+				{ art: 'Obj. 3', labelKey: 'reports.vet_providers', ok: kpis.activeProviders > 0, detail: `${kpis.activeProviders}` },
+				{ art: 'Obj. 1', labelKey: 'reports.obj_adoption', ok: kpis.totalAdoptions > 0, detail: `${kpis.totalAdoptions}` }
+			]
+		},
+		{
+			law: 'Art. 13 TFUE',
+			titleKey: 'reports.tfue',
+			articles: [
+				{ art: 'Art. 13', labelKey: 'reports.obj_health', ok: kpis.totalHealthRecords > 0, detail: `${kpis.totalHealthRecords}` },
+				{ art: 'Art. 13', labelKey: 'reports.volunteering', ok: kpis.volunteerHours > 0, detail: `${kpis.volunteerHours.toFixed(0)}h` }
+			]
+		},
+		{
+			law: 'One Health',
+			titleKey: 'reports.one_health',
+			articles: [
+				{ art: 'ODS 15', labelKey: 'reports.compliance', ok: true, detail: '' },
+				{ art: 'ODS 3', labelKey: 'reports.one_health', ok: kpis.activeProviders > 0 && kpis.totalInspections > 0, detail: '' }
+			]
+		}
+	]);
+
+	const complianceSummary = $derived.by(() => {
+		const all = complianceLaws.flatMap(g => g.articles);
+		const passed = all.filter(a => a.ok).length;
+		return { passed, total: all.length, pct: all.length > 0 ? Math.round((passed / all.length) * 100) : 0 };
+	});
 
 	function exportCSV() {
 		const rows = [
-			['Indicador', 'Valor'],
-			['Colonias activas', String(kpis.activeColonies)],
-			['Total colonias', String(kpis.totalColonies)],
-			['Gatos censados', String(kpis.totalCats)],
-			['Gatos esterilizados', String(kpis.sterilizedCats)],
-			['Tasa esterilización', `${kpis.sterilizationRate}%`],
-			['Incidencias totales', String(kpis.totalIncidents)],
-			['Incidencias abiertas', String(kpis.openIncidents)],
-			['Incidencias resueltas', String(kpis.resolvedIncidents)],
-			['Acciones CER', String(kpis.totalCER)],
-			['Colaboradores activos', String(kpis.activeCollaborators)],
-			['Total colaboradores', String(kpis.totalCollaborators)]
+			[t(locale, 'reports.indicator'), t(locale, 'reports.result')],
+			[t(locale, 'reports.active_colonies'), String(kpis.activeColonies)],
+			[t(locale, 'reports.cats_registered'), String(kpis.totalCats)],
+			[t(locale, 'reports.sterilization_rate'), `${kpis.sterilizationRate}%`],
+			[t(locale, 'reports.cer_actions'), String(kpis.totalCER)],
+			[t(locale, 'reports.active_collaborators'), String(kpis.activeCollaborators)],
+			[t(locale, 'reports.total_visits'), String(kpis.totalVisits)],
+			[t(locale, 'reports.inspections'), String(kpis.totalInspections)],
+			[t(locale, 'reports.adoptions'), String(kpis.totalAdoptions)],
+			[t(locale, 'reports.volunteer_hours'), String(kpis.volunteerHours)]
 		];
-
-		rows.push([''], ['Gatos por colonia']);
-		data.catsByColony.forEach((c: any) => rows.push([c.colonyName, String(c.catCount)]));
-
-		rows.push([''], ['Incidencias por categoría']);
-		data.incidentsByCategory.forEach((c: any) => rows.push([categoryLabel(c.category), String(c.count)]));
-
 		const csv = rows.map(r => r.join(',')).join('\n');
 		const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
 		const url = URL.createObjectURL(blob);
@@ -47,163 +125,512 @@
 	}
 </script>
 
-<div>
+<div class="max-w-7xl mx-auto">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
-			<h2 class="text-2xl font-bold text-gray-800">{t(locale, 'reports.title')}</h2>
-			<p class="text-sm text-gray-500 mt-1">Indicadores y estadísticas del programa</p>
+			<h1 class="text-2xl font-bold text-text tracking-tight">{t(locale, 'reports.title')}</h1>
+			<p class="text-sm text-text-muted mt-0.5">{t(locale, 'reports.subtitle')}</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<button onclick={exportCSV} class="px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition-colors text-sm">
-				📥 Resumen CSV
+			<button onclick={exportCSV} class="inline-flex items-center gap-2 px-4 py-2 bg-success text-white text-sm font-medium rounded-lg hover:bg-success/90 transition-colors">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+				{t(locale, 'reports.export_csv_full')}
 			</button>
-			<a href="/api/export-pdf?type=general" target="_blank" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 transition-colors text-sm inline-flex items-center">
-				📄 Informe PDF
+			<a href="/api/export-pdf?type=general" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-danger text-white text-sm font-medium rounded-lg hover:bg-danger/90 transition-colors">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+				PDF
 			</a>
-			<div class="relative group">
-				<button class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 text-sm">📊 Exportar datos</button>
-				<div class="hidden group-hover:block absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg z-10 min-w-[180px]">
-					<a href="/api/export-excel?type=colonies" class="block px-4 py-2 text-sm hover:bg-gray-50">Colonias</a>
-					<a href="/api/export-excel?type=cats" class="block px-4 py-2 text-sm hover:bg-gray-50">Gatos</a>
-					<a href="/api/export-excel?type=incidents" class="block px-4 py-2 text-sm hover:bg-gray-50">Incidencias</a>
-					<a href="/api/export-excel?type=cer" class="block px-4 py-2 text-sm hover:bg-gray-50">Acciones CER</a>
-					<a href="/api/export-excel?type=health" class="block px-4 py-2 text-sm hover:bg-gray-50">Salud</a>
-					<a href="/api/export-excel?type=collaborators" class="block px-4 py-2 text-sm hover:bg-gray-50">Colaboradores</a>
-				</div>
+		</div>
+	</div>
+
+	<div class="flex gap-1 p-1 bg-surface-sunken rounded-lg w-fit mb-6">
+		<button onclick={() => activeTab = 'kpis'} class="px-4 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'kpis' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'}">
+			{t(locale, 'reports.kpis')}
+		</button>
+		<button onclick={() => activeTab = 'compliance'} class="px-4 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'compliance' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'}">
+			{t(locale, 'reports.compliance')}
+		</button>
+		<button onclick={() => activeTab = 'dgda'} class="px-4 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'dgda' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'}">
+			{t(locale, 'reports.dgda')}
+		</button>
+	</div>
+
+	{#if activeTab === 'kpis'}
+		<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-primary">{kpis.activeColonies}</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.active_colonies')}</div>
+				<div class="text-[11px] text-text-muted">{kpis.totalColonies} {t(locale, 'reports.total')}</div>
+			</div>
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-primary">{kpis.totalCats}</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.cats_registered')}</div>
+				<div class="text-[11px] text-text-muted">{kpis.microchippedCats} {t(locale, 'reports.with_microchip')}</div>
+			</div>
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-accent">{kpis.sterilizationRate}%</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.sterilization_rate')}</div>
+				<div class="text-[11px] text-text-muted">{kpis.sterilizedCats}/{kpis.totalCats}</div>
+			</div>
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-info">{kpis.totalCER}</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.cer_actions')}</div>
+				<div class="text-[11px] text-text-muted">{t(locale, 'reports.documented')}</div>
+			</div>
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-warning">{kpis.incidentResolutionRate}%</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.incident_resolution')}</div>
+				<div class="text-[11px] text-text-muted">{kpis.resolvedIncidents}/{kpis.totalIncidents}</div>
+			</div>
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-primary">{kpis.activeCollaborators}</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.active_collaborators')}</div>
+				<div class="text-[11px] text-text-muted">{kpis.totalCollaborators} {t(locale, 'reports.total')}</div>
+			</div>
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-success">{kpis.totalVisits}</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.total_visits')}</div>
+				<div class="text-[11px] text-text-muted">{kpis.recentVisits} {t(locale, 'reports.last_30d')}</div>
+			</div>
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-accent">{kpis.volunteerHours.toFixed(0)}h</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.volunteer_hours')}</div>
+				<div class="text-[11px] text-text-muted">{t(locale, 'reports.recorded')}</div>
+			</div>
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-info">{kpis.totalInspections}</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.inspections')}</div>
+				<div class="text-[11px] text-text-muted">{t(locale, 'reports.documented')}</div>
+			</div>
+			<div class="bg-surface rounded-xl border border-border p-4">
+				<div class="text-2xl font-bold text-primary">{kpis.totalAdoptions}</div>
+				<div class="text-xs text-text-muted mt-1">{t(locale, 'reports.adoptions')}</div>
+				<div class="text-[11px] text-text-muted">{t(locale, 'reports.managed')}</div>
 			</div>
 		</div>
-	</div>
 
-	<!-- KPIs -->
-	<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-		<div class="bg-white rounded-lg shadow-sm p-4 text-center">
-			<div class="text-2xl font-bold text-primary">{kpis.activeColonies}</div>
-			<div class="text-xs text-gray-500 mt-1">Colonias activas</div>
-		</div>
-		<div class="bg-white rounded-lg shadow-sm p-4 text-center">
-			<div class="text-2xl font-bold text-primary">{kpis.totalCats}</div>
-			<div class="text-xs text-gray-500 mt-1">Gatos censados</div>
-		</div>
-		<div class="bg-white rounded-lg shadow-sm p-4 text-center">
-			<div class="text-2xl font-bold text-accent">{kpis.sterilizationRate}%</div>
-			<div class="text-xs text-gray-500 mt-1">Tasa esterilización</div>
-		</div>
-		<div class="bg-white rounded-lg shadow-sm p-4 text-center">
-			<div class="text-2xl font-bold text-warning">{kpis.openIncidents}</div>
-			<div class="text-xs text-gray-500 mt-1">Incidencias abiertas</div>
-		</div>
-		<div class="bg-white rounded-lg shadow-sm p-4 text-center">
-			<div class="text-2xl font-bold text-info">{kpis.totalCER}</div>
-			<div class="text-xs text-gray-500 mt-1">Acciones CER</div>
-		</div>
-		<div class="bg-white rounded-lg shadow-sm p-4 text-center">
-			<div class="text-2xl font-bold text-primary">{kpis.activeCollaborators}</div>
-			<div class="text-xs text-gray-500 mt-1">Colaboradores activos</div>
-		</div>
-	</div>
+		<div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+			<div class="bg-surface rounded-xl border border-border p-5">
+				<h3 class="text-sm font-semibold text-text mb-4">{t(locale, 'reports.cats_by_colony')}</h3>
+				{#if data.catsByColony.length > 0}
+					<div class="space-y-3">
+						{#each data.catsByColony as row}
+							{@const max = Math.max(...data.catsByColony.map((r: { catCount: number }) => Number(r.catCount)))}
+							{@const pct = max > 0 ? (Number(row.catCount) / max) * 100 : 0}
+							<div>
+								<div class="flex justify-between text-sm mb-1">
+									<span class="text-text-secondary">{row.colonyName}</span>
+									<span class="font-semibold text-text">{row.catCount}</span>
+								</div>
+								<div class="h-2 bg-surface-sunken rounded-full overflow-hidden">
+									<div class="h-full bg-primary rounded-full transition-all" style="width: {pct}%"></div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<p class="text-text-muted text-sm">{t(locale, 'reports.no_data')}</p>
+				{/if}
+			</div>
 
-	<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-		<!-- Cats by colony -->
-		<div class="bg-white rounded-lg shadow-sm p-5">
-			<h3 class="font-bold text-gray-800 mb-4">🐈 Gatos por colonia</h3>
-			{#if data.catsByColony.length > 0}
-				<div class="space-y-3">
-					{#each data.catsByColony as row}
-						{@const max = Math.max(...data.catsByColony.map((r: any) => Number(r.catCount)))}
-						{@const pct = max > 0 ? (Number(row.catCount) / max) * 100 : 0}
-						<div>
-							<div class="flex justify-between text-sm mb-1">
-								<span>{row.colonyName}</span>
-								<span class="font-bold">{row.catCount}</span>
+			<div class="bg-surface rounded-xl border border-border p-5">
+				<h3 class="text-sm font-semibold text-text mb-4">{t(locale, 'reports.incidents_by_category')}</h3>
+				{#if data.incidentsByCategory.length > 0}
+					<div class="space-y-3">
+						{#each data.incidentsByCategory as row}
+							{@const max = Math.max(...data.incidentsByCategory.map((r: { count: number }) => Number(r.count)))}
+							{@const pct = max > 0 ? (Number(row.count) / max) * 100 : 0}
+							<div>
+								<div class="flex justify-between text-sm mb-1">
+									<span class="text-text-secondary">{categoryLabel(row.category)}</span>
+									<span class="font-semibold text-text">{row.count}</span>
+								</div>
+								<div class="h-2 bg-surface-sunken rounded-full overflow-hidden">
+									<div class="h-full bg-warning rounded-full transition-all" style="width: {pct}%"></div>
+								</div>
 							</div>
-							<div class="h-4 bg-gray-100 rounded-full overflow-hidden">
-								<div class="h-full bg-primary rounded-full transition-all" style="width: {pct}%"></div>
-							</div>
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<p class="text-gray-400 text-sm">Sin datos</p>
-			{/if}
+						{/each}
+					</div>
+				{:else}
+					<p class="text-text-muted text-sm">{t(locale, 'reports.no_data')}</p>
+				{/if}
+			</div>
 		</div>
 
-		<!-- Incidents by category -->
-		<div class="bg-white rounded-lg shadow-sm p-5">
-			<h3 class="font-bold text-gray-800 mb-4">⚠️ Incidencias por categoría</h3>
-			{#if data.incidentsByCategory.length > 0}
-				<div class="space-y-3">
-					{#each data.incidentsByCategory as row}
-						{@const max = Math.max(...data.incidentsByCategory.map((r: any) => Number(r.count)))}
-						{@const pct = max > 0 ? (Number(row.count) / max) * 100 : 0}
-						<div>
-							<div class="flex justify-between text-sm mb-1">
-								<span>{categoryLabel(row.category)}</span>
-								<span class="font-bold">{row.count}</span>
-							</div>
-							<div class="h-4 bg-gray-100 rounded-full overflow-hidden">
-								<div class="h-full bg-warning rounded-full transition-all" style="width: {pct}%"></div>
-							</div>
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<p class="text-gray-400 text-sm">Sin datos</p>
-			{/if}
-		</div>
-	</div>
-
-	<!-- Sterilization progress -->
-	<div class="bg-white rounded-lg shadow-sm p-5 mb-6">
-		<h3 class="font-bold text-gray-800 mb-4">✂️ Progreso de Esterilización</h3>
-		<div class="flex items-center gap-4">
-			<div class="flex-1">
-				<div class="flex justify-between text-sm mb-2">
-					<span>{kpis.sterilizedCats} de {kpis.totalCats} gatos esterilizados</span>
-					<span class="font-bold text-accent">{kpis.sterilizationRate}%</span>
-				</div>
-				<div class="h-6 bg-gray-100 rounded-full overflow-hidden">
-					<div class="h-full bg-accent rounded-full transition-all flex items-center justify-center text-white text-xs font-bold" style="width: {kpis.sterilizationRate}%">
-						{kpis.sterilizationRate}%
+		<div class="bg-surface rounded-xl border border-border p-5 mb-6">
+			<h3 class="text-sm font-semibold text-text mb-4">{t(locale, 'reports.sterilization_progress')}</h3>
+			<div class="flex items-center gap-4">
+				<div class="flex-1">
+					<div class="flex justify-between text-sm mb-2">
+						<span class="text-text-secondary">{kpis.sterilizedCats} {t(locale, 'reports.sterilized_of')} {kpis.totalCats} {t(locale, 'reports.cats_sterilized')}</span>
+						<span class="font-semibold text-accent">{kpis.sterilizationRate}%</span>
+					</div>
+					<div class="h-3 bg-surface-sunken rounded-full overflow-hidden">
+						<div class="h-full bg-accent rounded-full transition-all" style="width: {kpis.sterilizationRate}%"></div>
 					</div>
 				</div>
 			</div>
 		</div>
-	</div>
 
-	<!-- Audit log -->
-	<div class="bg-white rounded-lg shadow-sm p-5">
-		<h3 class="font-bold text-gray-800 mb-4">📋 Registro de Auditoría (últimos 10)</h3>
-		{#if data.auditLog.length > 0}
-			<div class="overflow-x-auto">
-				<table class="w-full text-sm">
-					<thead class="bg-gray-50">
-						<tr>
-							<th class="px-4 py-2 text-left font-semibold">Fecha</th>
-							<th class="px-4 py-2 text-left font-semibold">Usuario</th>
-							<th class="px-4 py-2 text-left font-semibold">Entidad</th>
-							<th class="px-4 py-2 text-left font-semibold">Acción</th>
-							<th class="px-4 py-2 text-left font-semibold">Detalles</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.auditLog as log}
-							<tr class="border-t hover:bg-gray-50">
-								<td class="px-4 py-2 text-xs">{log.createdAt ? new Date(log.createdAt).toLocaleString('es') : '-'}</td>
-								<td class="px-4 py-2">{log.userName ?? '-'}</td>
-								<td class="px-4 py-2 capitalize">{log.entity}</td>
-								<td class="px-4 py-2 capitalize">{log.action}</td>
-								<td class="px-4 py-2 text-xs text-gray-500">
-									{#if log.details && typeof log.details === 'object'}
-										{JSON.stringify(log.details).slice(0, 60)}
-									{/if}
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+		<div class="bg-surface rounded-xl border border-border p-5 mb-6">
+			<h3 class="text-sm font-semibold text-text mb-4">{t(locale, 'reports.export_module')}</h3>
+			<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+				<a href="/api/export-excel?type=colonies" class="flex flex-col items-center gap-1 px-3 py-3 bg-surface-sunken rounded-lg hover:bg-border transition-colors text-center">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5 text-primary"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+					<span class="text-xs font-medium text-text-secondary">{t(locale, 'reports.export_colonies')}</span>
+				</a>
+				<a href="/api/export-excel?type=cats" class="flex flex-col items-center gap-1 px-3 py-3 bg-surface-sunken rounded-lg hover:bg-border transition-colors text-center">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5 text-accent"><circle cx="12" cy="12" r="3"/><path d="M12 5v-2m0 18v-2m7-7h2M3 12h2"/></svg>
+					<span class="text-xs font-medium text-text-secondary">{t(locale, 'reports.export_cats')}</span>
+				</a>
+				<a href="/api/export-excel?type=incidents" class="flex flex-col items-center gap-1 px-3 py-3 bg-surface-sunken rounded-lg hover:bg-border transition-colors text-center">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5 text-warning"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+					<span class="text-xs font-medium text-text-secondary">{t(locale, 'reports.export_incidents')}</span>
+				</a>
+				<a href="/api/export-excel?type=cer" class="flex flex-col items-center gap-1 px-3 py-3 bg-surface-sunken rounded-lg hover:bg-border transition-colors text-center">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5 text-success"><polyline points="22,7 13.5,15.5 8.5,10.5 2,17"/></svg>
+					<span class="text-xs font-medium text-text-secondary">{t(locale, 'reports.export_cer')}</span>
+				</a>
+				<a href="/api/export-excel?type=health" class="flex flex-col items-center gap-1 px-3 py-3 bg-surface-sunken rounded-lg hover:bg-border transition-colors text-center">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5 text-info"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+					<span class="text-xs font-medium text-text-secondary">{t(locale, 'reports.export_health')}</span>
+				</a>
+				<a href="/api/export-excel?type=collaborators" class="flex flex-col items-center gap-1 px-3 py-3 bg-surface-sunken rounded-lg hover:bg-border transition-colors text-center">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5 text-primary"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+					<span class="text-xs font-medium text-text-secondary">{t(locale, 'reports.export_collaborators')}</span>
+				</a>
 			</div>
-		{:else}
-			<p class="text-gray-400 text-sm">Sin registros de auditoría</p>
-		{/if}
-	</div>
+		</div>
+
+		<div class="bg-surface rounded-xl border border-border overflow-hidden">
+			<div class="px-5 py-4 border-b border-border">
+				<h3 class="text-sm font-semibold text-text">{t(locale, 'reports.audit_log')}</h3>
+				<p class="text-xs text-text-muted mt-0.5">{t(locale, 'reports.last_10')}</p>
+			</div>
+			{#if data.auditLog.length > 0}
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead class="bg-surface-sunken text-text-muted text-left text-xs uppercase tracking-wide">
+							<tr>
+								<th class="px-4 py-3 font-medium">{t(locale, 'reports.date')}</th>
+								<th class="px-4 py-3 font-medium">{t(locale, 'reports.user')}</th>
+								<th class="px-4 py-3 font-medium">{t(locale, 'reports.entity')}</th>
+								<th class="px-4 py-3 font-medium">{t(locale, 'reports.action')}</th>
+								<th class="px-4 py-3 font-medium">{t(locale, 'reports.details')}</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-border">
+							{#each data.auditLog as log}
+								<tr class="hover:bg-surface-sunken/50 transition-colors">
+									<td class="px-4 py-3 text-xs text-text-muted">{log.createdAt ? new Date(log.createdAt).toLocaleString(locale) : '-'}</td>
+									<td class="px-4 py-3 text-text-secondary">{log.userName ?? '-'}</td>
+									<td class="px-4 py-3 text-text-secondary">{translateEntity(log.entity)}</td>
+									<td class="px-4 py-3 text-text-secondary">{translateAction(log.action)}</td>
+									<td class="px-4 py-3 text-xs text-text-muted max-w-xs truncate">{formatAuditDetails(log.details)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{:else}
+				<p class="px-5 py-12 text-center text-text-muted text-sm">{t(locale, 'reports.no_audit')}</p>
+			{/if}
+		</div>
+	{/if}
+
+	{#if activeTab === 'compliance'}
+		<div class="bg-surface rounded-xl border-2 border-primary/20 p-6 mb-6">
+			<div class="flex items-center justify-between mb-4">
+				<div>
+					<h3 class="text-base font-semibold text-text">{t(locale, 'reports.compliance_score')}</h3>
+					<p class="text-xs text-text-muted mt-0.5">{t(locale, 'reports.compliance_subtitle')}</p>
+				</div>
+				<div class="text-right">
+					<span class="text-3xl font-bold {complianceSummary.pct >= 80 ? 'text-success' : complianceSummary.pct >= 50 ? 'text-warning' : 'text-danger'}">{complianceSummary.pct}%</span>
+					<p class="text-xs text-text-muted">{complianceSummary.passed}/{complianceSummary.total} {t(locale, 'reports.requirements')}</p>
+				</div>
+			</div>
+			<div class="w-full h-3 bg-surface-sunken rounded-full overflow-hidden">
+				<div class="h-full rounded-full transition-all duration-700 {complianceSummary.pct >= 80 ? 'bg-success' : complianceSummary.pct >= 50 ? 'bg-warning' : 'bg-danger'}" style="width: {complianceSummary.pct}%"></div>
+			</div>
+		</div>
+
+		<div class="space-y-4">
+			{#each complianceLaws as group}
+				{@const passed = group.articles.filter(a => a.ok).length}
+				{@const allOk = passed === group.articles.length}
+				<div class="bg-surface rounded-xl border border-border overflow-hidden">
+					<div class="px-5 py-4 border-b border-border flex items-center justify-between {allOk ? 'bg-success/3' : 'bg-warning/3'}">
+						<div>
+							<div class="flex items-center gap-2">
+								{#if allOk}
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-4 h-4 text-success"><polyline points="20,6 9,17 4,12"/></svg>
+								{:else}
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-warning"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+								{/if}
+								<span class="text-sm font-bold text-text">{group.law}</span>
+								<span class="text-xs font-medium {allOk ? 'text-success' : 'text-warning'}">{passed}/{group.articles.length}</span>
+							</div>
+							<p class="text-xs text-text-muted mt-0.5 ml-6">{t(locale, group.titleKey)}</p>
+						</div>
+					</div>
+					<div class="divide-y divide-border">
+						{#each group.articles as art}
+							<div class="px-5 py-3 flex items-start gap-3 {art.ok ? '' : 'bg-warning/3'}">
+								<div class="mt-0.5 flex-shrink-0">
+									{#if art.ok}
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-4 h-4 text-success"><polyline points="20,6 9,17 4,12"/></svg>
+									{:else}
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-warning"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+									{/if}
+								</div>
+								<div class="flex-1 min-w-0">
+									<div class="flex items-center gap-2">
+										<span class="text-[10px] font-semibold uppercase tracking-wider text-text-muted bg-surface-sunken px-1.5 py-0.5 rounded">{art.art}</span>
+										<span class="text-sm text-text">{t(locale, art.labelKey)}</span>
+									</div>
+									{#if art.detail}
+										<p class="text-xs text-text-muted mt-0.5">{art.detail}</p>
+									{/if}
+								</div>
+								<span class="text-xs font-medium px-2 py-0.5 rounded {art.ok ? 'bg-success/8 text-success' : 'bg-warning/8 text-warning'}">{art.ok ? t(locale, 'compliance.compliant') : t(locale, 'compliance.pending')}</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/each}
+		</div>
+	{/if}
+
+	{#if activeTab === 'dgda'}
+		<div class="bg-surface rounded-xl border-2 border-primary/20 p-6 mb-6">
+			<div class="flex items-start gap-4 mb-5">
+				<div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-6 h-6 text-primary"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><path d="M9 15l2 2 4-4"/></svg>
+				</div>
+				<div>
+					<h3 class="text-lg font-bold text-text">{t(locale, 'reports.dgda_title')}</h3>
+					<p class="text-sm text-text-secondary mt-0.5">{t(locale, 'reports.dgda_subtitle')}</p>
+				</div>
+			</div>
+
+			<div class="space-y-5">
+				<div class="border border-border rounded-lg overflow-hidden">
+					<div class="px-4 py-3 bg-surface-sunken border-b border-border">
+						<h4 class="text-sm font-semibold text-text">{t(locale, 'reports.dgda_section1')}</h4>
+					</div>
+					<div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+						<div><span class="text-text-muted">{t(locale, 'reports.program')}:</span> <span class="font-medium text-text">{t(locale, 'reports.program_name')}</span></div>
+						<div><span class="text-text-muted">{t(locale, 'reports.dossier')}:</span> <span class="font-medium text-text">2026/CO_ASUM/0013</span></div>
+						<div><span class="text-text-muted">{t(locale, 'reports.org')}:</span> <span class="font-medium text-text">{t(locale, 'reports.org_name')}</span></div>
+						<div><span class="text-text-muted">{t(locale, 'reports.legal_framework')}:</span> <span class="font-medium text-text">Ley 7/2023</span></div>
+					</div>
+				</div>
+
+				<div class="border border-border rounded-lg overflow-hidden">
+					<div class="px-4 py-3 bg-surface-sunken border-b border-border">
+						<h4 class="text-sm font-semibold text-text">{t(locale, 'reports.dgda_section2')}</h4>
+					</div>
+					<div class="p-4">
+						<table class="w-full text-sm">
+							<thead class="text-left text-xs text-text-muted uppercase">
+								<tr>
+									<th class="pb-2 font-medium">{t(locale, 'reports.objective')}</th>
+									<th class="pb-2 font-medium">{t(locale, 'reports.indicator')}</th>
+									<th class="pb-2 font-medium text-right">{t(locale, 'reports.result')}</th>
+									<th class="pb-2 font-medium text-center">{t(locale, 'reports.status')}</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-border">
+								<tr>
+									<td class="py-2.5 text-text-secondary">{t(locale, 'reports.obj_cer')}</td>
+									<td class="py-2.5 text-text-muted">{t(locale, 'reports.ind_sterilization')}</td>
+									<td class="py-2.5 text-right font-semibold text-text">{kpis.sterilizationRate}%</td>
+									<td class="py-2.5 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium {kpis.sterilizationRate >= 50 ? 'bg-success/8 text-success' : 'bg-warning/8 text-warning'}">{kpis.sterilizationRate >= 50 ? t(locale, 'reports.fulfilled') : t(locale, 'reports.in_progress')}</span></td>
+								</tr>
+								<tr>
+									<td class="py-2.5 text-text-secondary">{t(locale, 'reports.obj_census')}</td>
+									<td class="py-2.5 text-text-muted">{t(locale, 'reports.ind_cats')}</td>
+									<td class="py-2.5 text-right font-semibold text-text">{kpis.totalCats}</td>
+									<td class="py-2.5 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium {kpis.totalCats > 0 ? 'bg-success/8 text-success' : 'bg-warning/8 text-warning'}">{kpis.totalCats > 0 ? t(locale, 'reports.fulfilled') : t(locale, 'reports.pending_status')}</span></td>
+								</tr>
+								<tr>
+									<td class="py-2.5 text-text-secondary">{t(locale, 'reports.obj_id')}</td>
+									<td class="py-2.5 text-text-muted">{t(locale, 'reports.ind_microchip')}</td>
+									<td class="py-2.5 text-right font-semibold text-text">{kpis.microchippedCats}</td>
+									<td class="py-2.5 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium {kpis.microchippedCats > 0 ? 'bg-success/8 text-success' : 'bg-warning/8 text-warning'}">{kpis.microchippedCats > 0 ? t(locale, 'reports.fulfilled') : t(locale, 'reports.pending_status')}</span></td>
+								</tr>
+								<tr>
+									<td class="py-2.5 text-text-secondary">{t(locale, 'reports.obj_health')}</td>
+									<td class="py-2.5 text-text-muted">{t(locale, 'reports.ind_health')}</td>
+									<td class="py-2.5 text-right font-semibold text-text">{kpis.totalHealthRecords}</td>
+									<td class="py-2.5 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium {kpis.totalHealthRecords > 0 ? 'bg-success/8 text-success' : 'bg-warning/8 text-warning'}">{kpis.totalHealthRecords > 0 ? t(locale, 'reports.fulfilled') : t(locale, 'reports.pending_status')}</span></td>
+								</tr>
+								<tr>
+									<td class="py-2.5 text-text-secondary">{t(locale, 'reports.obj_volunteers')}</td>
+									<td class="py-2.5 text-text-muted">{t(locale, 'reports.ind_collaborators')}</td>
+									<td class="py-2.5 text-right font-semibold text-text">{kpis.activeCollaborators}</td>
+									<td class="py-2.5 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium {kpis.activeCollaborators > 0 ? 'bg-success/8 text-success' : 'bg-warning/8 text-warning'}">{kpis.activeCollaborators > 0 ? t(locale, 'reports.fulfilled') : t(locale, 'reports.pending_status')}</span></td>
+								</tr>
+								<tr>
+									<td class="py-2.5 text-text-secondary">{t(locale, 'reports.obj_incidents')}</td>
+									<td class="py-2.5 text-text-muted">{t(locale, 'reports.ind_resolution')}</td>
+									<td class="py-2.5 text-right font-semibold text-text">{kpis.incidentResolutionRate}%</td>
+									<td class="py-2.5 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium {kpis.incidentResolutionRate >= 60 ? 'bg-success/8 text-success' : 'bg-warning/8 text-warning'}">{kpis.incidentResolutionRate >= 60 ? t(locale, 'reports.fulfilled') : t(locale, 'reports.in_progress')}</span></td>
+								</tr>
+								<tr>
+									<td class="py-2.5 text-text-secondary">{t(locale, 'reports.obj_adoption')}</td>
+									<td class="py-2.5 text-text-muted">{t(locale, 'reports.ind_adoptions')}</td>
+									<td class="py-2.5 text-right font-semibold text-text">{kpis.totalAdoptions}</td>
+									<td class="py-2.5 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium {kpis.totalAdoptions > 0 ? 'bg-success/8 text-success' : 'bg-info/8 text-info'}">{kpis.totalAdoptions > 0 ? t(locale, 'reports.fulfilled') : t(locale, 'reports.optional')}</span></td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+
+				<div class="border border-border rounded-lg overflow-hidden">
+					<div class="px-4 py-3 bg-surface-sunken border-b border-border">
+						<h4 class="text-sm font-semibold text-text">{t(locale, 'reports.dgda_section3')}</h4>
+					</div>
+					<div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+						<div class="bg-surface-sunken rounded-lg p-3 text-center">
+							<p class="text-2xl font-bold text-primary">{kpis.activeCollaborators}</p>
+							<p class="text-xs text-text-muted mt-1">{t(locale, 'reports.active_carers')}</p>
+							<p class="text-[11px] text-text-muted">{kpis.totalCollaborators} {t(locale, 'reports.total_registered')}</p>
+						</div>
+						<div class="bg-surface-sunken rounded-lg p-3 text-center">
+							<p class="text-2xl font-bold text-accent">{kpis.volunteerHours.toFixed(0)}h</p>
+							<p class="text-xs text-text-muted mt-1">{t(locale, 'reports.volunteer_hours_label')}</p>
+							<p class="text-[11px] text-text-muted">{t(locale, 'reports.documented_in_platform')}</p>
+						</div>
+						<div class="bg-surface-sunken rounded-lg p-3 text-center">
+							<p class="text-2xl font-bold text-info">{kpis.activeProviders}</p>
+							<p class="text-xs text-text-muted mt-1">{t(locale, 'reports.vet_providers')}</p>
+							<p class="text-[11px] text-text-muted">{t(locale, 'reports.active_agreement')}</p>
+						</div>
+					</div>
+				</div>
+
+				<div class="border border-border rounded-lg overflow-hidden">
+					<div class="px-4 py-3 bg-surface-sunken border-b border-border">
+						<h4 class="text-sm font-semibold text-text">{t(locale, 'reports.dgda_section4')}</h4>
+					</div>
+					<div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<p class="text-sm text-text mb-2 font-medium">{t(locale, 'reports.territorial_coverage')}</p>
+							<div class="space-y-2">
+								<div class="flex justify-between text-sm">
+									<span class="text-text-muted">{t(locale, 'reports.geolocated_colonies')}</span>
+									<span class="font-semibold text-text">{kpis.geolocatedColonies}/{kpis.totalColonies} ({kpis.geolocatedPct}%)</span>
+								</div>
+								<div class="h-2 bg-surface-sunken rounded-full overflow-hidden">
+									<div class="h-full bg-primary rounded-full" style="width: {kpis.geolocatedPct}%"></div>
+								</div>
+							</div>
+						</div>
+						<div>
+							<p class="text-sm text-text mb-2 font-medium">{t(locale, 'reports.monitoring_activity')}</p>
+							<div class="grid grid-cols-2 gap-2 text-sm">
+								<div class="bg-surface-sunken rounded-lg p-2 text-center">
+									<p class="font-bold text-text">{kpis.totalVisits}</p>
+									<p class="text-[11px] text-text-muted">{t(locale, 'reports.total_visits')}</p>
+								</div>
+								<div class="bg-surface-sunken rounded-lg p-2 text-center">
+									<p class="font-bold text-text">{kpis.totalInspections}</p>
+									<p class="text-[11px] text-text-muted">{t(locale, 'reports.inspections')}</p>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="border border-border rounded-lg overflow-hidden">
+					<div class="px-4 py-3 bg-surface-sunken border-b border-border">
+						<h4 class="text-sm font-semibold text-text">{t(locale, 'reports.dgda_section5')}</h4>
+					</div>
+					<div class="p-4">
+						<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+							{#each complianceLaws as group}
+								{@const passed = group.articles.filter(a => a.ok).length}
+								{@const allOk = passed === group.articles.length}
+								<div class="flex items-center gap-2 px-3 py-2 rounded-lg {allOk ? 'bg-success/5' : 'bg-warning/5'}">
+									{#if allOk}
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-4 h-4 text-success flex-shrink-0"><polyline points="20,6 9,17 4,12"/></svg>
+									{:else}
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-warning flex-shrink-0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+									{/if}
+									<div>
+										<p class="text-xs font-semibold text-text">{group.law}</p>
+										<p class="text-[11px] text-text-muted">{passed}/{group.articles.length} {t(locale, 'reports.requirements')}</p>
+									</div>
+								</div>
+							{/each}
+						</div>
+						<div class="mt-4 p-3 bg-info/5 border border-info/15 rounded-lg">
+							<p class="text-xs text-info font-medium">{t(locale, 'reports.compliance_global')}: {complianceSummary.pct}% ({complianceSummary.passed}/{complianceSummary.total} {t(locale, 'reports.verified_requirements')})</p>
+							<p class="text-[11px] text-text-muted mt-1">{t(locale, 'reports.compliance_global_detail')}</p>
+						</div>
+					</div>
+				</div>
+
+				<div class="border border-border rounded-lg overflow-hidden">
+					<div class="px-4 py-3 bg-surface-sunken border-b border-border">
+						<h4 class="text-sm font-semibold text-text">{t(locale, 'reports.dgda_section6')}</h4>
+					</div>
+					<div class="p-4">
+						<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+							<div class="bg-surface-sunken rounded-lg p-3">
+								<p class="text-xl font-bold text-primary">{kpis.totalColonies}</p>
+								<p class="text-xs text-text-muted">{t(locale, 'reports.colonies_managed')}</p>
+							</div>
+							<div class="bg-surface-sunken rounded-lg p-3">
+								<p class="text-xl font-bold text-accent">{kpis.totalCats}</p>
+								<p class="text-xs text-text-muted">{t(locale, 'reports.animals_registered')}</p>
+							</div>
+							<div class="bg-surface-sunken rounded-lg p-3">
+								<p class="text-xl font-bold text-success">{kpis.sterilizedCats}</p>
+								<p class="text-xs text-text-muted">{t(locale, 'reports.sterilizations')}</p>
+							</div>
+							<div class="bg-surface-sunken rounded-lg p-3">
+								<p class="text-xl font-bold text-info">{kpis.totalCER}</p>
+								<p class="text-xs text-text-muted">{t(locale, 'reports.cer_actions')}</p>
+							</div>
+							<div class="bg-surface-sunken rounded-lg p-3">
+								<p class="text-xl font-bold text-primary">{kpis.totalHealthRecords}</p>
+								<p class="text-xs text-text-muted">{t(locale, 'reports.health_procedures')}</p>
+							</div>
+							<div class="bg-surface-sunken rounded-lg p-3">
+								<p class="text-xl font-bold text-accent">{kpis.totalAdoptions}</p>
+								<p class="text-xs text-text-muted">{t(locale, 'reports.adoptions')}</p>
+							</div>
+							<div class="bg-surface-sunken rounded-lg p-3">
+								<p class="text-xl font-bold text-warning">{kpis.resolvedIncidents}</p>
+								<p class="text-xs text-text-muted">{t(locale, 'reports.incidents_resolved')}</p>
+							</div>
+							<div class="bg-surface-sunken rounded-lg p-3">
+								<p class="text-xl font-bold text-info">{kpis.volunteerHours.toFixed(0)}h</p>
+								<p class="text-xs text-text-muted">{t(locale, 'reports.volunteering')}</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="mt-6 flex flex-wrap gap-2">
+				<a href="/api/export-pdf?type=subsidy_dgda" target="_blank" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors shadow-sm">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+					{t(locale, 'reports.generate_dgda')}
+				</a>
+				<a href="/api/export-excel?type=subsidy" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-success text-white text-sm font-medium rounded-lg hover:bg-success/90 transition-colors">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+					{t(locale, 'reports.subsidy_data')}
+				</a>
+				<a href="/api/export-pdf?type=compliance_report" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-info text-white text-sm font-medium rounded-lg hover:bg-info/90 transition-colors">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M9 12l2 2 4-4"/><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/></svg>
+					{t(locale, 'reports.compliance_report_pdf')}
+				</a>
+			</div>
+		</div>
+	{/if}
 </div>

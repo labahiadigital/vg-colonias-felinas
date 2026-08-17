@@ -144,5 +144,39 @@ export const actions: Actions = {
 
 		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: incidentId, action: 'comment', details: { text: comment } });
 		return { commented: true };
+	},
+
+	edit: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		const category = fd.get('category') as string;
+		const priority = fd.get('priority') as string;
+		const description = fd.get('description') as string;
+		const colonyId = fd.get('colonyId') as string;
+
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		await db.update(incidents).set({
+			...(category && { category }),
+			...(priority && { priority }),
+			...(description && { description }),
+			colonyId: colonyId || null,
+			updatedAt: new Date()
+		}).where(eq(incidents.id, id));
+
+		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: id, action: 'update', details: { category, priority } });
+		return { edited: true };
+	},
+
+	delete: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		await db.delete(incidents).where(eq(incidents.id, id));
+		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: id, action: 'delete', details: {} });
+		return { deleted: true };
 	}
 };

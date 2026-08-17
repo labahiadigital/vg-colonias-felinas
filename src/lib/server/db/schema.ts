@@ -249,6 +249,9 @@ export const inspectionTemplates = pgTable('inspection_templates', {
 	name: text('name').notNull(),
 	description: text('description'),
 	schema: jsonb('schema').notNull(),
+	scoringWeights: jsonb('scoring_weights'),
+	maxScore: integer('max_score'),
+	passingScore: integer('passing_score'),
 	isActive: boolean('is_active').default(true),
 	createdAt: timestamp('created_at').defaultNow()
 });
@@ -261,8 +264,12 @@ export const inspections = pgTable('inspections', {
 	incidentId: uuid('incident_id').references(() => incidents.id),
 	inspectorId: uuid('inspector_id').references(() => users.id),
 	results: jsonb('results').notNull(),
+	score: doublePrecision('score'),
+	passed: boolean('passed'),
 	photos: jsonb('photos'),
 	notes: text('notes'),
+	followUpRequired: boolean('follow_up_required').default(false),
+	followUpDate: date('follow_up_date'),
 	createdAt: timestamp('created_at').defaultNow()
 });
 
@@ -322,6 +329,10 @@ export const conversations = pgTable('conversations', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
 	title: text('title'),
+	type: text('type').notNull().default('direct'),
+	colonyId: uuid('colony_id').references(() => colonies.id),
+	zone: text('zone'),
+	roleFilter: text('role_filter'),
 	participants: jsonb('participants'),
 	createdAt: timestamp('created_at').defaultNow()
 });
@@ -364,6 +375,8 @@ export const catalogs = pgTable('catalogs', {
 	key: text('key').notNull(),
 	label: text('label').notNull(),
 	labelEu: text('label_eu'),
+	labelCa: text('label_ca'),
+	labelEn: text('label_en'),
 	sortOrder: integer('sort_order').default(0),
 	isActive: boolean('is_active').default(true),
 	metadata: jsonb('metadata'),
@@ -408,6 +421,100 @@ export const dataRetentionPolicies = pgTable('data_retention_policies', {
 	action: text('action').notNull().default('anonymize'),
 	isActive: boolean('is_active').default(true),
 	createdAt: timestamp('created_at').defaultNow()
+});
+
+// ─── Visits / Activity Logging ──────────────────────────────────
+
+export const visits = pgTable('visits', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+	colonyId: uuid('colony_id').references(() => colonies.id),
+	userId: uuid('user_id').references(() => users.id),
+	collaboratorId: uuid('collaborator_id').references(() => collaborators.id),
+	type: text('type').notNull().default('feeding'),
+	latitude: doublePrecision('latitude'),
+	longitude: doublePrecision('longitude'),
+	durationMinutes: integer('duration_minutes'),
+	notes: text('notes'),
+	photos: jsonb('photos'),
+	catsObserved: integer('cats_observed'),
+	foodProvided: boolean('food_provided').default(false),
+	waterProvided: boolean('water_provided').default(false),
+	incidentDetected: boolean('incident_detected').default(false),
+	visitedAt: timestamp('visited_at').defaultNow(),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
+// ─── Volunteer Hours ────────────────────────────────────────────
+
+export const volunteerHours = pgTable('volunteer_hours', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+	userId: uuid('user_id').references(() => users.id),
+	collaboratorId: uuid('collaborator_id').references(() => collaborators.id),
+	colonyId: uuid('colony_id').references(() => colonies.id),
+	visitId: uuid('visit_id').references(() => visits.id),
+	hours: doublePrecision('hours').notNull(),
+	activityType: text('activity_type').notNull(),
+	date: date('date').notNull(),
+	verified: boolean('verified').default(false),
+	verifiedBy: uuid('verified_by').references(() => users.id),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
+// ─── Providers (Veterinarios, Clínicas, Servicios) ──────────────
+
+export const providers = pgTable('providers', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	type: text('type').notNull().default('veterinary'),
+	contactPerson: text('contact_person'),
+	email: text('email'),
+	phone: text('phone'),
+	address: text('address'),
+	city: text('city'),
+	specializations: jsonb('specializations'),
+	licenseNumber: text('license_number'),
+	contractStart: date('contract_start'),
+	contractEnd: date('contract_end'),
+	status: text('status').notNull().default('active'),
+	notes: text('notes'),
+	createdAt: timestamp('created_at').defaultNow(),
+	updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const providerInterventions = pgTable('provider_interventions', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	providerId: uuid('provider_id').notNull().references(() => providers.id, { onDelete: 'cascade' }),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+	catId: uuid('cat_id').references(() => cats.id),
+	colonyId: uuid('colony_id').references(() => colonies.id),
+	type: text('type').notNull(),
+	description: text('description'),
+	cost: doublePrecision('cost'),
+	performedAt: timestamp('performed_at').notNull(),
+	invoiceRef: text('invoice_ref'),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
+// ─── Subsidy Reports (Memorias de Subvención) ──────────────────
+
+export const subsidyReports = pgTable('subsidy_reports', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+	title: text('title').notNull(),
+	type: text('type').notNull().default('dgda'),
+	periodStart: date('period_start').notNull(),
+	periodEnd: date('period_end').notNull(),
+	status: text('status').notNull().default('draft'),
+	data: jsonb('data'),
+	generatedBy: uuid('generated_by').references(() => users.id),
+	approvedBy: uuid('approved_by').references(() => users.id),
+	approvedAt: timestamp('approved_at'),
+	documentPath: text('document_path'),
+	createdAt: timestamp('created_at').defaultNow(),
+	updatedAt: timestamp('updated_at').defaultNow()
 });
 
 // ─── Audit Logs ─────────────────────────────────────────────────

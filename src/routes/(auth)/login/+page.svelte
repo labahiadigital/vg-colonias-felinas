@@ -32,100 +32,110 @@
 	}
 </script>
 
-<div class="flex-1 flex items-center justify-center p-4">
-	<div class="w-full max-w-md">
-		<div class="bg-white rounded-lg shadow-lg border-t-4 border-primary p-8">
-			<!-- Language switcher -->
-			<div class="flex justify-end gap-2 mb-6">
-				{#each Object.entries(localeNames) as [code, name]}
-					<a
-						href="?locale={code}"
-						class="text-sm font-semibold {locale === code ? 'text-gray-800 underline' : 'text-primary hover:underline'}"
-					>
-						{name}
-					</a>
-					{#if code !== 'eu'}
-						<span class="text-gray-400">|</span>
-					{/if}
-				{/each}
-			</div>
+<div class="flex-1 flex items-center justify-center p-4 bg-background min-h-screen">
+	<div class="w-full max-w-sm">
+		<!-- Language switcher -->
+		<div class="flex justify-center gap-1 mb-8">
+			{#each Object.entries(localeNames) as [code, name]}
+				<a
+					href="?locale={code}"
+					class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors
+						{locale === code ? 'bg-text text-text-inverse' : 'text-text-muted hover:text-text hover:bg-surface-sunken'}"
+				>
+					{name}
+				</a>
+			{/each}
+		</div>
 
-			<!-- Logo -->
-			<div class="text-center mb-8">
-				<div class="w-44 h-16 bg-gray-100 mx-auto mb-4 flex items-center justify-center font-bold text-gray-500 border border-dashed border-gray-300 rounded">
-					AYTO. VITORIA-GASTEIZ
-				</div>
-				<h2 class="text-xl font-bold text-primary">{t(locale, 'app.title')}</h2>
-				<p class="text-sm text-gray-500 mt-1">{t('eu', 'app.title')}</p>
+		<!-- Logo + title -->
+		<div class="text-center mb-8">
+			<div class="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
+				<svg viewBox="0 0 32 32" fill="none" class="w-8 h-8">
+					<path d="M16 4C11.58 4 8 7.58 8 12c0 6 8 14 8 14s8-8 8-14c0-4.42-3.58-8-8-8z" fill="white"/>
+					<path d="M12 8.5L10 5.5 13 7.5z" fill="white" stroke="white" stroke-width="0.3" stroke-linejoin="round"/>
+					<path d="M20 8.5L22 5.5 19 7.5z" fill="white" stroke="white" stroke-width="0.3" stroke-linejoin="round"/>
+					<ellipse cx="14" cy="11" rx="0.9" ry="1.1" fill="#0f766e"/>
+					<ellipse cx="18" cy="11" rx="0.9" ry="1.1" fill="#0f766e"/>
+					<path d="M15.5 13L16 12.5l0.5 0.5" stroke="#0f766e" stroke-width="0.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+				</svg>
 			</div>
+			<h1 class="text-xl font-bold text-text tracking-tight">Gatopolis</h1>
+			<p class="text-sm text-text-muted mt-1">{t(locale, 'app.subtitle')}</p>
+		</div>
 
-			<!-- Login form -->
+		<!-- Login card -->
+		<div class="bg-surface rounded-xl border border-border p-6">
 			<form onsubmit={handleLogin}>
 				{#if error}
-					<div class="bg-danger-light text-danger text-sm p-3 rounded-md mb-4">
-						{error}
+					<div class="flex items-start gap-2 bg-danger-subtle text-danger text-sm p-3 rounded-lg mb-4 border border-danger/10">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 mt-0.5 flex-shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+						<span>{error}</span>
 					</div>
 				{/if}
 
-				<div class="mb-4">
-					<label for="email" class="block text-sm font-semibold mb-2">
-						{t(locale, 'auth.email')} / {t('eu', 'auth.email')}
-					</label>
-					<input
-						type="email"
-						id="email"
-						bind:value={email}
-						placeholder="ejemplo@vitoria-gasteiz.org"
-						required
-						class="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-					/>
-				</div>
+				<div class="space-y-4">
+					<div>
+						<label for="email" class="block text-sm font-medium text-text-secondary mb-1.5">
+							{t(locale, 'auth.email')}
+						</label>
+						<input
+							type="email"
+							id="email"
+							bind:value={email}
+							placeholder="tu@organizacion.org"
+							required
+							class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+						/>
+					</div>
 
-				<div class="mb-6">
-					<label for="password" class="block text-sm font-semibold mb-2">
-						{t(locale, 'auth.password')} / {t('eu', 'auth.password')}
-					</label>
-					<input
-						type="password"
-						id="password"
-						bind:value={password}
-						placeholder="••••••••"
-						required
-						class="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-					/>
+					<div>
+						<div class="flex items-center justify-between mb-1.5">
+							<label for="password" class="block text-sm font-medium text-text-secondary">
+								{t(locale, 'auth.password')}
+							</label>
+							<a href="/recuperar-contrasena" class="text-xs text-primary hover:text-primary-hover font-medium transition-colors">
+								{t(locale, 'auth.forgot')}
+							</a>
+						</div>
+						<input
+							type="password"
+							id="password"
+							bind:value={password}
+							placeholder="••••••••"
+							required
+							class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+						/>
+					</div>
 				</div>
 
 				<button
 					type="submit"
 					disabled={loading}
-					class="w-full py-3 bg-primary text-white font-bold rounded-md hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					class="w-full mt-6 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					{#if loading}
-						{t(locale, 'common.loading')}
+						<span class="inline-flex items-center gap-2">
+							<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>
+							{t(locale, 'common.loading')}
+						</span>
 					{:else}
-						{t(locale, 'auth.login')} / {t('eu', 'auth.login')}
+						{t(locale, 'auth.login')}
 					{/if}
 				</button>
 			</form>
-
-			<div class="text-center mt-6">
-				<a href="/recuperar-contrasena" class="text-sm text-primary hover:underline">
-					{t(locale, 'auth.forgot')} / {t('eu', 'auth.forgot')}
-				</a>
-			</div>
 		</div>
 
 		<div class="text-center mt-6">
-			<a href="/registro" class="text-sm text-primary font-semibold hover:underline">¿Nueva entidad? Registrar organización</a>
-		</div>
-		<div class="flex justify-center gap-4 mt-4 text-xs text-gray-400">
-			<a href="/privacidad" class="hover:text-gray-600 hover:underline">Privacidad</a>
-			<span>·</span>
-			<a href="/terminos" class="hover:text-gray-600 hover:underline">Términos</a>
+			<p class="text-sm text-text-muted">
+				¿Nueva organización?
+				<a href="/registro" class="text-primary hover:text-primary-hover font-medium transition-colors">Registrarse</a>
+			</p>
 		</div>
 
-		<p class="text-center text-xs text-gray-400 mt-3">
-			{t(locale, 'app.expediente')} - {t(locale, 'app.title')}
-		</p>
+		<div class="flex justify-center gap-3 mt-8 text-xs text-text-muted">
+			<a href="/privacidad" class="hover:text-text-secondary transition-colors">Privacidad</a>
+			<span>·</span>
+			<a href="/terminos" class="hover:text-text-secondary transition-colors">Términos</a>
+		</div>
 	</div>
 </div>

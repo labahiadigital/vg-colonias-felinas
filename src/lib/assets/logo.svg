@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Map pin with cat ears - Gatopolis isotipo -->
+  <path d="M16 2C10.48 2 6 6.48 6 12c0 7.5 10 18 10 18s10-10.5 10-18c0-5.52-4.48-10-10-10z" fill="currentColor"/>
+  <!-- Left ear -->
+  <path d="M10.5 7L8 3.5 11.5 6z" fill="currentColor" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/>
+  <!-- Right ear -->
+  <path d="M21.5 7L24 3.5 20.5 6z" fill="currentColor" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/>
+  <!-- Cat face -->
+  <circle cx="16" cy="11.5" r="5.5" fill="white" opacity="0.95"/>
+  <!-- Eyes -->
+  <ellipse cx="13.8" cy="10.8" rx="1" ry="1.2" fill="currentColor"/>
+  <ellipse cx="18.2" cy="10.8" rx="1" ry="1.2" fill="currentColor"/>
+  <!-- Nose -->
+  <path d="M15.4 12.8L16 12.2l0.6 0.6" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Mouth -->
+  <path d="M14.5 13.5Q16 14.5 17.5 13.5" stroke="currentColor" stroke-width="0.5" stroke-linecap="round" fill="none"/>
+  <!-- Whiskers -->
+  <line x1="11" y1="11.5" x2="13" y2="12" stroke="currentColor" stroke-width="0.4" stroke-linecap="round"/>
+  <line x1="11" y1="13" x2="13" y2="12.8" stroke="currentColor" stroke-width="0.4" stroke-linecap="round"/>
+  <line x1="21" y1="11.5" x2="19" y2="12" stroke="currentColor" stroke-width="0.4" stroke-linecap="round"/>
+  <line x1="21" y1="13" x2="19" y2="12.8" stroke="currentColor" stroke-width="0.4" stroke-linecap="round"/>
+</svg>

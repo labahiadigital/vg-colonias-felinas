@@ -1,0 +1,51 @@
+{
+	"name": "Gatopolis — Gestión de Colonias Felinas",
+	"short_name": "Gatopolis",
+	"description": "Donde cada gato cuenta. Plataforma profesional de gestión de colonias felinas urbanas.",
+	"start_url": "/dashboard",
+	"display": "standalone",
+	"background_color": "#09090b",
+	"theme_color": "#0f766e",
+	"orientation": "any",
+	"categories": ["productivity", "utilities"],
+	"icons": [
+		{
+			"src": "/favicon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml"
+		},
+		{
+			"src": "/icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any maskable"
+		},
+		{
+			"src": "/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any maskable"
+		}
+	],
+	"screenshots": [],
+	"shortcuts": [
+		{
+			"name": "Dashboard",
+			"short_name": "Inicio",
+			"url": "/dashboard",
+			"icons": []
+		},
+		{
+			"name": "Mapa",
+			"short_name": "Mapa",
+			"url": "/mapa",
+			"icons": []
+		},
+		{
+			"name": "Nueva incidencia",
+			"short_name": "Incidencia",
+			"url": "/incidencias?new=1",
+			"icons": []
+		}
+	]
+}

@@ -114,5 +114,45 @@ export const actions: Actions = {
 		await notify({ type: 'adoption_status', title: 'Adopción actualizada', message: `Una adopción ha cambiado a estado: ${statusLabels[status] || status}`, payload: { adoptionId: id, status } });
 
 		return { success: true };
+	},
+
+	edit: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/login');
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		const adopterName = fd.get('adopterName') as string;
+		const adopterPhone = fd.get('adopterPhone') as string;
+		const adopterEmail = fd.get('adopterEmail') as string;
+
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		const [current] = await db.select().from(adoptions).where(eq(adoptions.id, id));
+		if (!current) return fail(404, { error: 'No encontrado' });
+
+		const adopterInfo = (current.adopterInfo as Record<string, unknown>) ?? {};
+		if (adopterName) adopterInfo.name = adopterName;
+		if (adopterPhone !== undefined) adopterInfo.phone = adopterPhone || null;
+		if (adopterEmail !== undefined) adopterInfo.email = adopterEmail || null;
+
+		await db.update(adoptions).set({ adopterInfo }).where(eq(adoptions.id, id));
+		await db.insert(auditLogs).values({ userId: locals.user.id, entity: 'adoption', entityId: id, action: 'update', details: { adopterName } });
+		return { edited: true };
+	},
+
+	delete: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/login');
+		const fd = await request.formData();
+		const id = fd.get('id') as string;
+		if (!id) return fail(400, { error: 'ID obligatorio' });
+
+		await db.delete(adoptions).where(eq(adoptions.id, id));
+		await db.insert(auditLogs).values({
+			userId: locals.user.id,
+			entity: 'adoption',
+			entityId: id,
+			action: 'delete',
+			details: {}
+		});
+		return { deleted: true };
 	}
 };

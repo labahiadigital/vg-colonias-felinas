@@ -15,184 +15,219 @@
 		const entity = (document.getElementById('importEntity') as HTMLSelectElement)?.value;
 		const fileInput = document.getElementById('importFile') as HTMLInputElement;
 		const file = fileInput?.files?.[0];
-		if (!file) { importResult = 'Selecciona un archivo'; return; }
+		if (!file) { importResult = t(locale, 'settings.select_file'); return; }
 		const fd = new FormData();
 		fd.append('file', file);
 		fd.append('entity', entity);
-		importResult = 'Importando...';
+		importResult = t(locale, 'settings.importing');
 		try {
 			const res = await fetch('/api/import', { method: 'POST', body: fd });
 			const d = await res.json();
 			if (d.success) {
-				importResult = `Importados: ${d.imported}/${d.totalRows}` + (d.errors?.length > 0 ? ` (${d.errors.length} errores)` : '');
+				importResult = `${t(locale, 'settings.imported')}: ${d.imported}/${d.totalRows}` + (d.errors?.length > 0 ? ` (${d.errors.length} ${t(locale, 'settings.errors')})` : '');
 			} else {
 				importResult = d.error || 'Error';
 			}
-		} catch { importResult = 'Error de conexión'; }
+		} catch { importResult = t(locale, 'settings.connection_error'); }
 	}
 
 	let sections = $derived([
-		{ id: 'profile', label: 'Mi Perfil', icon: '👤' },
-		{ id: 'preferences', label: 'Preferencias', icon: '⚙️' },
-		{ id: 'security', label: 'Seguridad', icon: '🔒' },
+		{ id: 'profile', label: t(locale, 'settings.profile') },
+		{ id: 'preferences', label: t(locale, 'settings.preferences') },
+		{ id: 'security', label: t(locale, 'settings.security') },
 		...(isAdmin ? [
-			{ id: 'users', label: 'Usuarios', icon: '👥' },
-			{ id: 'roles', label: 'Roles y Permisos', icon: '🔑' },
-			{ id: 'catalogs', label: 'Catálogos', icon: '📋' },
-			{ id: 'templates', label: 'Plantillas', icon: '📝' },
-			{ id: 'email', label: 'Email y Notif.', icon: '📧' },
-			{ id: 'retention', label: 'Retención', icon: '🗄️' },
-			{ id: 'import', label: 'Importar/Exportar', icon: '📦' },
-			{ id: 'audit', label: 'Auditoría', icon: '📜' }
+			{ id: 'users', label: t(locale, 'settings.users') },
+			{ id: 'roles', label: t(locale, 'settings.roles') },
+			{ id: 'catalogs', label: t(locale, 'settings.catalogs') },
+			{ id: 'templates', label: t(locale, 'settings.templates') },
+			{ id: 'email', label: t(locale, 'settings.email_notif') },
+			{ id: 'retention', label: t(locale, 'settings.retention') },
+			{ id: 'import', label: t(locale, 'settings.import_export') },
+			{ id: 'audit', label: t(locale, 'settings.audit_log') }
 		] : []),
-		{ id: 'about', label: 'Acerca de', icon: 'ℹ️' }
+		{ id: 'about', label: t(locale, 'settings.about') }
 	]);
 
-	const catalogTypes = [
-		{ value: 'colony_status', label: 'Estado de colonia' },
-		{ value: 'colony_classification', label: 'Clasificación de colonia' },
-		{ value: 'cat_status', label: 'Estado de gato' },
-		{ value: 'incident_category', label: 'Categoría de incidencia' },
-		{ value: 'incident_priority', label: 'Prioridad de incidencia' },
-		{ value: 'health_type', label: 'Tipo de actuación sanitaria' },
-		{ value: 'adoption_status', label: 'Estado de adopción' },
-		{ value: 'collaborator_status', label: 'Estado de colaborador' }
-	];
+	function translateAction(action: string): string {
+		const key = `activity.action.${action.toLowerCase()}`;
+		const translated = t(locale, key);
+		return translated !== key ? translated : action;
+	}
+
+	function translateEntity(entity: string): string {
+		const key = `activity.entity.${entity.toLowerCase()}`;
+		const translated = t(locale, key);
+		return translated !== key ? translated : entity;
+	}
+
+	function formatAuditDetails(details: unknown): string {
+		if (!details || typeof details !== 'object') return '-';
+		const d = details as Record<string, unknown>;
+		const parts: string[] = [];
+		if (d.name) parts.push(String(d.name));
+		if (d.cat) parts.push(String(d.cat));
+		if (d.type) parts.push(String(d.type));
+		if (d.format) parts.push(String(d.format).toUpperCase());
+		if (d.status) parts.push(String(d.status));
+		if (d.newStatus) parts.push(`→ ${String(d.newStatus)}`);
+		if (d.category) parts.push(String(d.category));
+		if (d.colony) parts.push(String(d.colony));
+		if (d.label) parts.push(String(d.label));
+		if (d.certNumber) parts.push(String(d.certNumber));
+		if (d.priority) parts.push(String(d.priority));
+		return parts.join(' · ') || '-';
+	}
+
+	const catalogTypeKeys: Record<string, string> = {
+		colony_status: 'settings.cat_type.colony_status',
+		colony_classification: 'settings.cat_type.colony_classification',
+		cat_status: 'settings.cat_type.cat_status',
+		incident_category: 'settings.cat_type.incident_category',
+		incident_priority: 'settings.cat_type.incident_priority',
+		health_type: 'settings.cat_type.health_type',
+		adoption_status: 'settings.cat_type.adoption_status',
+		collaborator_status: 'settings.cat_type.collaborator_status'
+	};
+
+	const catalogTypeValues = Object.keys(catalogTypeKeys);
 </script>
 
-<div>
-	<h2 class="text-2xl font-bold text-gray-800 mb-6">{t(locale, 'settings.title')}</h2>
+<div class="max-w-7xl mx-auto">
+	<h1 class="text-2xl font-bold text-text tracking-tight mb-6">{t(locale, 'settings.title')}</h1>
 
 	<div class="flex flex-col lg:flex-row gap-6">
 		<nav class="w-full lg:w-56 flex-shrink-0">
-			<div class="bg-white rounded-lg shadow-sm overflow-hidden">
-				{#each sections as section}
-					<button
-						onclick={() => activeSection = section.id}
-						class="w-full px-4 py-3 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors
-							{activeSection === section.id ? 'bg-primary/10 text-primary font-semibold border-l-3 border-primary' : 'text-gray-600'}"
-					>
-						{section.icon} {section.label}
-					</button>
-				{/each}
+			<div class="bg-surface rounded-xl border border-border overflow-hidden lg:sticky lg:top-4">
+				<div class="flex lg:flex-col overflow-x-auto lg:overflow-x-visible mobile-scroll-snap">
+					{#each sections as section}
+						<button
+							onclick={() => activeSection = section.id}
+							class="flex-shrink-0 px-4 py-3 text-left text-sm font-medium transition-colors min-h-[44px] whitespace-nowrap
+								{activeSection === section.id ? 'bg-primary/5 text-primary border-b-2 lg:border-b-0 lg:border-l-2 border-primary' : 'text-text-secondary hover:bg-surface-sunken hover:text-text'}"
+						>
+							{section.label}
+						</button>
+					{/each}
+				</div>
 			</div>
 		</nav>
 
-		<div class="flex-1">
-			<!-- Profile -->
+		<div class="flex-1 min-w-0">
 			{#if activeSection === 'profile'}
-				<div class="bg-white rounded-lg shadow-sm p-6">
-					<h3 class="text-lg font-bold text-gray-800 mb-4">Perfil de Usuario</h3>
-					{#if form?.success}<div class="bg-green-50 text-green-800 text-sm p-3 rounded-md mb-4">Perfil actualizado correctamente.</div>{/if}
-					{#if form?.error}<div class="bg-red-50 text-red-700 text-sm p-3 rounded-md mb-4">{form.error}</div>{/if}
+				<div class="bg-surface rounded-xl border border-border p-6">
+					<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.user_profile')}</h3>
+					{#if form?.success}<div class="bg-success-subtle text-success text-sm p-3 rounded-lg mb-4 border border-success/10">{t(locale, 'settings.profile_updated')}</div>{/if}
+					{#if form?.error}<div class="bg-danger-subtle text-danger text-sm p-3 rounded-lg mb-4 border border-danger/10">{form.error}</div>{/if}
 
 					<form method="POST" action="?/updateProfile" use:enhance>
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label for="name" class="block text-sm font-semibold mb-1">Nombre</label>
-								<input type="text" name="name" id="name" value={user?.name ?? ''} required class="w-full px-3 py-2 border rounded-md text-sm" />
+								<label for="name" class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'common.name')}</label>
+								<input type="text" name="name" id="name" value={user?.name ?? ''} required class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors min-h-[44px]" />
 							</div>
 							<div>
-								<label for="email" class="block text-sm font-semibold mb-1">Email</label>
-								<input type="email" id="email" value={user?.email ?? ''} disabled class="w-full px-3 py-2 border rounded-md text-sm bg-gray-50" />
+								<label for="email" class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'common.email')}</label>
+								<input type="email" id="email" value={user?.email ?? ''} disabled class="w-full px-3 py-2.5 bg-surface-sunken border border-border rounded-lg text-sm text-text-muted min-h-[44px]" />
 							</div>
 							<div>
-								<label for="language" class="block text-sm font-semibold mb-1">Idioma preferido</label>
-								<select name="language" id="language" class="w-full px-3 py-2 border rounded-md text-sm">
-									<option value="es" selected={user?.language === 'es'}>Castellano</option>
-									<option value="eu" selected={user?.language === 'eu'}>Euskera</option>
+								<label for="language" class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'settings.language')}</label>
+								<select name="language" id="language" class="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors min-h-[44px]">
+									<option value="es" selected={user?.language === 'es'}>{t(locale, 'settings.lang_es')}</option>
+									<option value="eu" selected={user?.language === 'eu'}>{t(locale, 'settings.lang_eu')}</option>
+									<option value="ca" selected={user?.language === 'ca'}>{t(locale, 'settings.lang_ca')}</option>
+									<option value="en" selected={user?.language === 'en'}>{t(locale, 'settings.lang_en')}</option>
 								</select>
 							</div>
 							{#if data.userRole}
 								<div>
-									<span class="block text-sm font-semibold mb-1">Rol</span>
-									<div class="px-3 py-2 bg-gray-50 border rounded-md text-sm capitalize">{data.userRole}</div>
+									<label class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'settings.role')}</label>
+									<div class="px-3 py-2.5 bg-surface-sunken border border-border rounded-lg text-sm text-text-secondary capitalize min-h-[44px] flex items-center">{data.userRole}</div>
 								</div>
 							{/if}
 						</div>
-						<button type="submit" class="mt-4 px-5 py-2 bg-primary text-white rounded-md font-semibold hover:bg-primary-dark">Guardar cambios</button>
+						<div class="pt-5 mt-5 border-t border-border">
+							<button type="submit" class="px-5 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors min-h-[44px]">{t(locale, 'settings.save')}</button>
+						</div>
 					</form>
 				</div>
 			{/if}
 
-			<!-- Preferences -->
 			{#if activeSection === 'preferences'}
-				<div class="bg-white rounded-lg shadow-sm p-6">
-					<h3 class="text-lg font-bold text-gray-800 mb-4">Preferencias de Notificación</h3>
-					<div class="space-y-3">
+				<div class="bg-surface rounded-xl border border-border p-6">
+					<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.notification_prefs')}</h3>
+					<div class="space-y-2">
 						{#each [
-							{ id: 'email_notifications', label: 'Notificaciones por email', desc: 'Recibir alertas de incidencias y cambios', checked: true },
-							{ id: 'daily_summary', label: 'Resumen diario', desc: 'Recibir resumen de actividad al final del día', checked: false },
-							{ id: 'cer_alerts', label: 'Alertas CER', desc: 'Notificar sobre acciones CER pendientes', checked: true },
-							{ id: 'inspection_reminders', label: 'Recordatorios de inspección', desc: 'Avisar sobre inspecciones programadas', checked: true }
+							{ id: 'email_notifications', labelKey: 'settings.email_notifications', descKey: 'settings.email_notifications_desc', checked: true },
+							{ id: 'daily_summary', labelKey: 'settings.daily_summary', descKey: 'settings.daily_summary_desc', checked: false },
+							{ id: 'cer_alerts', labelKey: 'settings.cer_alerts', descKey: 'settings.cer_alerts_desc', checked: true },
+							{ id: 'inspection_reminders', labelKey: 'settings.inspection_reminders', descKey: 'settings.inspection_reminders_desc', checked: true }
 						] as pref}
-							<label for={pref.id} class="flex items-center justify-between p-3 bg-gray-50 rounded-md cursor-pointer hover:bg-gray-100">
+							<label for={pref.id} class="flex items-center justify-between p-4 bg-surface-sunken rounded-lg cursor-pointer hover:bg-border transition-colors min-h-[56px]">
 								<div>
-									<p class="text-sm font-semibold">{pref.label}</p>
-									<p class="text-xs text-gray-500">{pref.desc}</p>
+									<p class="text-sm font-medium text-text">{t(locale, pref.labelKey)}</p>
+									<p class="text-xs text-text-muted mt-0.5">{t(locale, pref.descKey)}</p>
 								</div>
-								<input type="checkbox" id={pref.id} checked={pref.checked} class="w-5 h-5" />
+								<input type="checkbox" id={pref.id} checked={pref.checked} class="rounded border-border text-primary focus:ring-primary/20 w-5 h-5" />
 							</label>
 						{/each}
 					</div>
 				</div>
 			{/if}
 
-			<!-- Security -->
 			{#if activeSection === 'security'}
-				<div class="bg-white rounded-lg shadow-sm p-6">
-					<h3 class="text-lg font-bold text-gray-800 mb-4">Seguridad</h3>
-					<div class="space-y-4">
-						<div class="p-4 bg-gray-50 rounded-md">
-							<h4 class="text-sm font-semibold mb-2">Cambiar contraseña</h4>
-							<p class="text-xs text-gray-500 mb-3">Para cambiar tu contraseña, utiliza la opción de recuperación.</p>
-							<a href="/recuperar-contrasena" class="text-sm text-primary font-semibold hover:underline">Ir a recuperar contraseña &rarr;</a>
+				<div class="bg-surface rounded-xl border border-border p-6">
+					<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.security')}</h3>
+					<div class="space-y-3">
+						<div class="p-4 bg-surface-sunken rounded-lg">
+							<h4 class="text-sm font-medium text-text mb-1">{t(locale, 'settings.change_password')}</h4>
+							<p class="text-xs text-text-muted mb-3">{t(locale, 'settings.change_password_desc')}</p>
+							<a href="/recuperar-contrasena" class="text-sm text-primary font-medium hover:text-primary-hover transition-colors">{t(locale, 'settings.recover_password')} &rarr;</a>
 						</div>
-						<div class="p-4 bg-gray-50 rounded-md">
-							<h4 class="text-sm font-semibold mb-2">Autenticación en dos factores (2FA)</h4>
-							<p class="text-xs text-gray-500">Próximamente disponible. [PENDIENTE DE CONFIRMAR]</p>
+						<div class="p-4 bg-surface-sunken rounded-lg">
+							<h4 class="text-sm font-medium text-text mb-1">{t(locale, 'settings.2fa')}</h4>
+							<p class="text-xs text-text-muted">{t(locale, 'settings.2fa_desc')}</p>
 						</div>
-						<div class="p-4 bg-gray-50 rounded-md">
-							<h4 class="text-sm font-semibold mb-2">Sesiones activas</h4>
-							<p class="text-xs text-gray-500">Tu sesión actual está activa desde este dispositivo.</p>
+						<div class="p-4 bg-surface-sunken rounded-lg">
+							<h4 class="text-sm font-medium text-text mb-1">{t(locale, 'settings.active_sessions')}</h4>
+							<p class="text-xs text-text-muted">{t(locale, 'settings.active_sessions_desc')}</p>
 						</div>
 					</div>
 				</div>
 			{/if}
 
-			<!-- Users (Admin only) -->
 			{#if activeSection === 'users' && isAdmin}
-				<div class="bg-white rounded-lg shadow-sm p-6">
-					<h3 class="text-lg font-bold text-gray-800 mb-4">Gestión de Usuarios ({data.allUsers.length})</h3>
-					{#if form?.roleSuccess}<div class="bg-green-50 text-green-800 text-sm p-3 rounded-md mb-4">Rol asignado correctamente.</div>{/if}
-
+				<div class="bg-surface rounded-xl border border-border overflow-hidden">
+					<div class="px-6 py-4 border-b border-border">
+						<h3 class="text-base font-semibold text-text">{t(locale, 'settings.user_management')} ({data.allUsers.length})</h3>
+					</div>
+					{#if form?.roleSuccess}<div class="mx-6 mt-4 bg-success-subtle text-success text-sm p-3 rounded-lg border border-success/10">{t(locale, 'settings.role_assigned')}</div>{/if}
 					<div class="overflow-x-auto">
 						<table class="w-full text-sm">
-							<thead class="bg-gray-50 text-gray-600 text-left">
+							<thead class="bg-surface-sunken text-text-muted text-left text-xs uppercase tracking-wide">
 								<tr>
-									<th class="px-4 py-3">Nombre</th>
-									<th class="px-4 py-3">Email</th>
-									<th class="px-4 py-3">Rol actual</th>
-									<th class="px-4 py-3">Registrado</th>
-									<th class="px-4 py-3">Asignar rol</th>
+									<th class="px-4 py-3 font-medium">{t(locale, 'common.name')}</th>
+									<th class="px-4 py-3 font-medium">{t(locale, 'common.email')}</th>
+									<th class="px-4 py-3 font-medium">{t(locale, 'settings.role')}</th>
+									<th class="px-4 py-3 font-medium">{t(locale, 'settings.registered')}</th>
+									<th class="px-4 py-3 font-medium">{t(locale, 'settings.assign')}</th>
 								</tr>
 							</thead>
-							<tbody class="divide-y">
+							<tbody class="divide-y divide-border">
 								{#each data.allUsers as u}
-									<tr class="hover:bg-gray-50">
-										<td class="px-4 py-3 font-medium">{u.name}</td>
-										<td class="px-4 py-3 text-gray-600">{u.email}</td>
-										<td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary capitalize">{u.roleName || 'Sin rol'}</span></td>
-										<td class="px-4 py-3 text-gray-500 text-xs">{u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-ES') : '-'}</td>
+									<tr class="hover:bg-surface-sunken/50 transition-colors">
+										<td class="px-4 py-3 font-medium text-text">{u.name}</td>
+										<td class="px-4 py-3 text-text-secondary">{u.email}</td>
+										<td class="px-4 py-3"><span class="px-2 py-0.5 rounded-md text-[11px] font-medium bg-primary/8 text-primary capitalize">{u.roleName || t(locale, 'settings.no_role')}</span></td>
+										<td class="px-4 py-3 text-text-muted text-xs">{u.createdAt ? new Date(u.createdAt).toLocaleDateString(locale) : '-'}</td>
 										<td class="px-4 py-3">
 											<form method="POST" action="?/assignRole" use:enhance class="flex gap-1.5 items-center">
 												<input type="hidden" name="userId" value={u.id} />
-												<select name="roleId" class="px-2 py-1 border rounded text-xs">
+												<select name="roleId" class="px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[32px]">
 													{#each data.allRoles as r}
 														<option value={r.id} selected={r.name === u.roleName}>{r.name}</option>
 													{/each}
 												</select>
-												<button type="submit" class="px-2 py-1 bg-primary text-white rounded text-xs hover:bg-primary-dark">Asignar</button>
+												<button type="submit" class="px-2.5 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover transition-colors min-h-[32px]">OK</button>
 											</form>
 										</td>
 									</tr>
@@ -203,67 +238,69 @@
 				</div>
 			{/if}
 
-			<!-- Roles & Permissions (Admin only) -->
 			{#if activeSection === 'roles' && isAdmin}
-				<div class="space-y-6">
-					<div class="bg-white rounded-lg shadow-sm p-6">
-						<div class="flex items-center justify-between mb-4">
-							<h3 class="text-lg font-bold text-gray-800">Roles del Sistema</h3>
-						</div>
-						{#if form?.roleCreated}<div class="bg-green-50 text-green-800 text-sm p-3 rounded-md mb-4">Rol creado correctamente.</div>{/if}
+				<div class="space-y-5">
+					<div class="bg-surface rounded-xl border border-border p-6">
+						<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.system_roles')}</h3>
+						{#if form?.roleCreated}<div class="bg-success-subtle text-success text-sm p-3 rounded-lg mb-4 border border-success/10">{t(locale, 'settings.role_created')}</div>{/if}
 
 						<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
 							{#each data.allRoles as role}
-								<div class="p-4 bg-gray-50 rounded-lg border">
-									<h4 class="font-bold capitalize">{role.name}</h4>
-									<p class="text-xs text-gray-500 mt-1">{role.description || 'Sin descripción'}</p>
-									<p class="text-xs text-gray-400 mt-2">
-										Permisos: {data.allRolePermissions.filter(rp => rp.roleId === role.id).length}
-									</p>
+								<div class="p-4 bg-surface-sunken rounded-lg border border-border">
+									<h4 class="font-semibold text-sm text-text capitalize">{role.name}</h4>
+									<p class="text-xs text-text-muted mt-1">{role.description || t(locale, 'settings.no_description')}</p>
+									<p class="text-xs text-text-muted mt-2">{t(locale, 'settings.permissions_count')}: {data.allRolePermissions.filter(rp => rp.roleId === role.id).length}</p>
 								</div>
 							{/each}
 						</div>
 
-						<div class="border-t pt-4">
-							<h4 class="text-sm font-bold mb-3">Crear nuevo rol</h4>
+						<div class="border-t border-border pt-4">
+							<h4 class="text-sm font-medium text-text mb-3">{t(locale, 'settings.create_role')}</h4>
 							<form method="POST" action="?/createRole" use:enhance class="flex gap-3 items-end flex-wrap">
 								<div>
-									<label for="roleName" class="block text-xs font-semibold mb-1">Nombre</label>
-									<input type="text" name="name" id="roleName" required class="px-3 py-2 border rounded-md text-sm" placeholder="ej: gestor_entidad" />
+									<label for="roleName" class="block text-xs font-medium text-text-muted mb-1.5">{t(locale, 'settings.role_name')}</label>
+									<input type="text" name="name" id="roleName" required class="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" placeholder={t(locale, 'settings.role_name_placeholder')} />
 								</div>
 								<div class="flex-1 min-w-[200px]">
-									<label for="roleDesc" class="block text-xs font-semibold mb-1">Descripción</label>
-									<input type="text" name="description" id="roleDesc" class="w-full px-3 py-2 border rounded-md text-sm" placeholder="Descripción del rol" />
+									<label for="roleDesc" class="block text-xs font-medium text-text-muted mb-1.5">{t(locale, 'settings.role_desc')}</label>
+									<input type="text" name="description" id="roleDesc" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" placeholder={t(locale, 'settings.role_desc_placeholder')} />
 								</div>
-								<button type="submit" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold hover:bg-primary-dark">Crear rol</button>
+								<button type="submit" class="px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors min-h-[40px]">{t(locale, 'settings.create_role_btn')}</button>
 							</form>
 						</div>
 					</div>
 
-					<div class="bg-white rounded-lg shadow-sm p-6">
-						<h3 class="text-lg font-bold text-gray-800 mb-4">Matriz de Permisos</h3>
-						<p class="text-xs text-gray-500 mb-4">Módulos y acciones disponibles en el sistema.</p>
+					<div class="bg-surface rounded-xl border border-border overflow-hidden">
+						<div class="px-6 py-4 border-b border-border">
+							<h3 class="text-base font-semibold text-text">{t(locale, 'settings.permissions_matrix')}</h3>
+						</div>
 						{#if data.allPermissions.length > 0}
 							<div class="overflow-x-auto">
 								<table class="w-full text-xs">
-									<thead class="bg-gray-50">
+									<thead class="bg-surface-sunken text-text-muted text-left uppercase tracking-wide">
 										<tr>
-											<th class="px-3 py-2 text-left">Módulo</th>
-											<th class="px-3 py-2 text-left">Acción</th>
+											<th class="px-3 py-3 font-medium">{t(locale, 'settings.module')}</th>
+											<th class="px-3 py-3 font-medium">{t(locale, 'settings.action')}</th>
 											{#each data.allRoles as role}
-												<th class="px-3 py-2 text-center capitalize">{role.name}</th>
+												<th class="px-3 py-3 font-medium text-center capitalize">{role.name}</th>
 											{/each}
 										</tr>
 									</thead>
-									<tbody class="divide-y">
+									<tbody class="divide-y divide-border">
 										{#each data.allPermissions as perm}
-											<tr class="hover:bg-gray-50">
-												<td class="px-3 py-2 capitalize font-medium">{perm.module}</td>
-												<td class="px-3 py-2">{perm.action}</td>
+											<tr class="hover:bg-surface-sunken/50 transition-colors">
+												<td class="px-3 py-2 font-medium capitalize text-text-secondary">{perm.module}</td>
+												<td class="px-3 py-2 text-text-secondary">{perm.action}</td>
 												{#each data.allRoles as role}
 													{@const has = data.allRolePermissions.some(rp => rp.roleId === role.id && rp.permissionId === perm.id)}
 													<td class="px-3 py-2 text-center">
-														<span class="text-lg">{has ? '✅' : '❌'}</span>
+														<span class="inline-flex w-5 h-5 items-center justify-center rounded-full {has ? 'bg-success/10 text-success' : 'bg-surface-sunken text-text-muted'}">
+															{#if has}
+																<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-3 h-3"><polyline points="20,6 9,17 4,12"/></svg>
+															{:else}
+																<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+															{/if}
+														</span>
 													</td>
 												{/each}
 											</tr>
@@ -272,45 +309,56 @@
 								</table>
 							</div>
 						{:else}
-							<p class="text-gray-400 text-sm">No hay permisos configurados. Ejecute el seed para crear permisos iniciales.</p>
+							<p class="px-6 py-8 text-center text-text-muted text-sm">{t(locale, 'settings.no_permissions')}</p>
 						{/if}
 					</div>
 				</div>
 			{/if}
 
-			<!-- Catalogs (Admin only) -->
 			{#if activeSection === 'catalogs' && isAdmin}
-				<div class="bg-white rounded-lg shadow-sm p-6">
-					<h3 class="text-lg font-bold text-gray-800 mb-4">Catálogos Configurables</h3>
-					<p class="text-xs text-gray-500 mb-4">Estados, categorías y templates del sistema. Estos valores configurables permiten adaptar la aplicación sin modificar código.</p>
+				<div class="bg-surface rounded-xl border border-border p-6">
+					<h3 class="text-base font-semibold text-text mb-1">{t(locale, 'settings.configurable_catalogs')}</h3>
+					<p class="text-xs text-text-muted mb-5">{t(locale, 'settings.catalogs_desc')}</p>
 
-					{#if form?.catalogCreated}<div class="bg-green-50 text-green-800 text-sm p-3 rounded-md mb-4">Entrada de catálogo creada.</div>{/if}
+					{#if form?.catalogCreated}<div class="bg-success-subtle text-success text-sm p-3 rounded-lg mb-4 border border-success/10">{t(locale, 'settings.catalog_created')}</div>{/if}
 
-					<form method="POST" action="?/createCatalog" use:enhance class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 p-4 bg-gray-50 rounded-lg">
+				<form method="POST" action="?/createCatalog" use:enhance class="space-y-4 mb-6 p-4 bg-surface-sunken rounded-lg">
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 						<div>
-							<label for="catType" class="block text-xs font-semibold mb-1">Tipo</label>
-							<select name="type" id="catType" required class="w-full px-3 py-2 border rounded-md text-sm">
-								{#each catalogTypes as ct}
-									<option value={ct.value}>{ct.label}</option>
+							<label for="catType" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'settings.catalog_type')}</label>
+							<select name="type" id="catType" required class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]">
+								{#each catalogTypeValues as ctVal}
+									<option value={ctVal}>{t(locale, catalogTypeKeys[ctVal])}</option>
 								{/each}
 							</select>
 						</div>
 						<div>
-							<label for="catKey" class="block text-xs font-semibold mb-1">Clave</label>
-							<input type="text" name="key" id="catKey" required class="w-full px-3 py-2 border rounded-md text-sm" placeholder="ej: activa" />
+							<label for="catKey" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'settings.catalog_key')}</label>
+							<input type="text" name="key" id="catKey" required class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" placeholder={t(locale, 'settings.catalog_key_placeholder')} />
+						</div>
+					</div>
+					<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+						<div>
+							<label for="catLabel" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'settings.catalog_label_es')}</label>
+							<input type="text" name="label" id="catLabel" required class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" placeholder={t(locale, 'settings.catalog_label_es_placeholder')} />
 						</div>
 						<div>
-							<label for="catLabel" class="block text-xs font-semibold mb-1">Etiqueta (ES)</label>
-							<input type="text" name="label" id="catLabel" required class="w-full px-3 py-2 border rounded-md text-sm" placeholder="ej: Activa" />
+							<label for="catLabelEu" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'settings.catalog_label_eu')}</label>
+							<input type="text" name="labelEu" id="catLabelEu" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" placeholder={t(locale, 'settings.catalog_label_eu_placeholder')} />
 						</div>
 						<div>
-							<label for="catLabelEu" class="block text-xs font-semibold mb-1">Etiqueta (EU)</label>
-							<input type="text" name="labelEu" id="catLabelEu" class="w-full px-3 py-2 border rounded-md text-sm" placeholder="ej: Aktiboa" />
+							<label for="catLabelCa" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'settings.catalog_label_ca')}</label>
+							<input type="text" name="labelCa" id="catLabelCa" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" placeholder={t(locale, 'settings.catalog_label_ca_placeholder')} />
 						</div>
-						<div class="flex items-end">
-							<button type="submit" class="w-full px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold hover:bg-primary-dark">Añadir</button>
+						<div>
+							<label for="catLabelEn" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'settings.catalog_label_en')}</label>
+							<input type="text" name="labelEn" id="catLabelEn" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" placeholder={t(locale, 'settings.catalog_label_en_placeholder')} />
 						</div>
-					</form>
+					</div>
+					<div>
+						<button type="submit" class="px-6 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors min-h-[40px]">{t(locale, 'settings.add')}</button>
+					</div>
+				</form>
 
 					{#if data.allCatalogs.length > 0}
 						{@const groupedCatalogs = data.allCatalogs.reduce((acc: Record<string, typeof data.allCatalogs>, c) => {
@@ -319,249 +367,250 @@
 						}, {})}
 						<div class="space-y-4">
 							{#each Object.entries(groupedCatalogs) as [type, items]}
-								<div class="border rounded-lg overflow-hidden">
-									<div class="px-4 py-2 bg-gray-50 font-semibold text-sm capitalize">{catalogTypes.find(ct => ct.value === type)?.label || type}</div>
+								<div class="border border-border rounded-lg overflow-hidden">
+									<div class="px-4 py-2.5 bg-surface-sunken text-sm font-medium text-text-secondary">{catalogTypeKeys[type] ? t(locale, catalogTypeKeys[type]) : type}</div>
+								<div class="overflow-x-auto">
 									<table class="w-full text-sm">
-										<tbody class="divide-y">
+										<thead class="bg-background text-text-muted text-left text-xs">
+											<tr>
+												<th class="px-3 py-2 font-medium">{t(locale, 'settings.catalog_key')}</th>
+												<th class="px-3 py-2 font-medium">ES</th>
+												<th class="px-3 py-2 font-medium">EU</th>
+												<th class="px-3 py-2 font-medium">CA</th>
+												<th class="px-3 py-2 font-medium">EN</th>
+												<th class="px-3 py-2 font-medium text-center">{t(locale, 'common.status')}</th>
+												<th class="px-3 py-2 font-medium"></th>
+											</tr>
+										</thead>
+										<tbody class="divide-y divide-border">
 											{#each items as item}
-												<tr class="hover:bg-gray-50">
-													<td class="px-4 py-2 font-mono text-xs text-gray-500">{item.key}</td>
-													<td class="px-4 py-2">{item.label}</td>
-													<td class="px-4 py-2 text-gray-500">{item.labelEu || '-'}</td>
-													<td class="px-4 py-2 text-center">{item.isActive ? '✅' : '❌'}</td>
+												<tr class="hover:bg-surface-sunken/50 transition-colors group">
+													<td class="px-3 py-1.5 font-mono text-xs text-text-muted">{item.key}</td>
+													<td class="px-3 py-1.5" colspan="4">
+														<form method="POST" action="?/editCatalog" use:enhance class="flex gap-1">
+															<input type="hidden" name="id" value={item.id} />
+															<input type="text" name="label" value={item.label} class="w-full px-2 py-1 bg-transparent border border-transparent hover:border-border focus:border-primary rounded text-xs text-text focus:outline-none transition-colors" />
+															<input type="text" name="labelEu" value={item.labelEu || ''} class="w-full px-2 py-1 bg-transparent border border-transparent hover:border-border focus:border-primary rounded text-xs text-text-muted focus:outline-none transition-colors" />
+															<input type="text" name="labelCa" value={item.labelCa || ''} class="w-full px-2 py-1 bg-transparent border border-transparent hover:border-border focus:border-primary rounded text-xs text-text-muted focus:outline-none transition-colors" />
+															<input type="text" name="labelEn" value={item.labelEn || ''} class="w-full px-2 py-1 bg-transparent border border-transparent hover:border-border focus:border-primary rounded text-xs text-text-muted focus:outline-none transition-colors" />
+															<button type="submit" class="opacity-0 group-hover:opacity-100 p-1 rounded text-primary hover:bg-primary/8 transition-all flex-shrink-0" title={t(locale, 'common.save')}>
+																<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><polyline points="20,6 9,17 4,12"/></svg>
+															</button>
+														</form>
+													</td>
+													<td class="px-3 py-1.5 text-center">
+														<span class="inline-flex w-5 h-5 items-center justify-center rounded-full {item.isActive ? 'bg-success/10 text-success' : 'bg-surface-sunken text-text-muted'}">
+															{#if item.isActive}
+																<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-3 h-3"><polyline points="20,6 9,17 4,12"/></svg>
+															{:else}
+																<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+															{/if}
+														</span>
+													</td>
+													<td class="px-3 py-1.5">
+														<form method="POST" action="?/deleteCatalog" use:enhance onsubmit={(e: SubmitEvent) => { if (!confirm(t(locale, 'common.confirm_delete'))) e.preventDefault(); }}>
+															<input type="hidden" name="id" value={item.id} />
+															<button type="submit" class="opacity-0 group-hover:opacity-100 p-1 rounded text-danger hover:bg-danger/8 transition-all" title={t(locale, 'common.delete')}>
+																<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-3.5 h-3.5"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+															</button>
+														</form>
+													</td>
 												</tr>
 											{/each}
 										</tbody>
 									</table>
 								</div>
+								</div>
 							{/each}
 						</div>
 					{:else}
-						<p class="text-gray-400 text-sm">No hay entradas de catálogo. Cree las primeras entradas arriba.</p>
+						<p class="text-text-muted text-sm">{t(locale, 'settings.no_catalogs')}</p>
 					{/if}
 				</div>
 			{/if}
 
-			<!-- Audit Log (Admin only) -->
+			{#if activeSection === 'import' && isAdmin}
+				<div class="space-y-5">
+					<div class="bg-surface rounded-xl border border-border p-6">
+						<h3 class="text-base font-semibold text-text mb-1">{t(locale, 'settings.import_csv')}</h3>
+						<p class="text-xs text-text-muted mb-4">{t(locale, 'settings.import_csv_desc')}</p>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+							<select id="importEntity" class="px-3 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[44px]">
+								<option value="colonies">{t(locale, 'settings.import_colonies')}</option>
+								<option value="cats">{t(locale, 'settings.import_cats')}</option>
+								<option value="collaborators">{t(locale, 'settings.import_collaborators')}</option>
+								<option value="health">{t(locale, 'settings.import_health')}</option>
+								<option value="incidents">{t(locale, 'settings.import_incidents')}</option>
+							</select>
+							<input type="file" id="importFile" accept=".csv,.txt" class="px-3 py-2.5 bg-background border border-border rounded-lg text-sm min-h-[44px]" />
+							<button type="button" onclick={handleImport} class="md:col-span-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors min-h-[44px]">{t(locale, 'settings.import_btn')}</button>
+						</div>
+						{#if importResult}
+							<p class="mt-3 text-sm text-text-secondary">{importResult}</p>
+						{/if}
+					</div>
+					<div class="bg-surface rounded-xl border border-border p-6">
+						<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.export_data')}</h3>
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							<a href="/api/export-full?format=json" target="_blank" class="block px-4 py-3 bg-surface-sunken rounded-lg text-center hover:bg-border transition-colors font-medium text-sm text-text-secondary min-h-[48px] flex items-center justify-center">{t(locale, 'settings.export_full_json')}</a>
+							<a href="/api/export-full?format=csv" target="_blank" class="block px-4 py-3 bg-surface-sunken rounded-lg text-center hover:bg-border transition-colors font-medium text-sm text-text-secondary min-h-[48px] flex items-center justify-center">{t(locale, 'settings.export_full_csv')}</a>
+						</div>
+					</div>
+				</div>
+			{/if}
+
 			{#if activeSection === 'audit' && isAdmin}
-				<div class="bg-white rounded-lg shadow-sm p-6">
-					<h3 class="text-lg font-bold text-gray-800 mb-4">Registro de Auditoría (últimos 20)</h3>
+				<div class="bg-surface rounded-xl border border-border overflow-hidden">
+					<div class="px-6 py-4 border-b border-border">
+						<h3 class="text-base font-semibold text-text">{t(locale, 'settings.audit_log')}</h3>
+						<p class="text-xs text-text-muted mt-0.5">{t(locale, 'settings.last_actions')}</p>
+					</div>
 					{#if data.auditLog && data.auditLog.length > 0}
 						<div class="overflow-x-auto">
 							<table class="w-full text-sm">
-								<thead class="bg-gray-50">
+								<thead class="bg-surface-sunken text-text-muted text-left text-xs uppercase tracking-wide">
 									<tr>
-										<th class="px-4 py-2 text-left font-semibold">Fecha</th>
-										<th class="px-4 py-2 text-left font-semibold">Usuario</th>
-										<th class="px-4 py-2 text-left font-semibold">Entidad</th>
-										<th class="px-4 py-2 text-left font-semibold">Acción</th>
-										<th class="px-4 py-2 text-left font-semibold">Detalles</th>
+										<th class="px-4 py-3 font-medium">{t(locale, 'settings.date')}</th>
+										<th class="px-4 py-3 font-medium">{t(locale, 'settings.user')}</th>
+										<th class="px-4 py-3 font-medium">{t(locale, 'settings.entity')}</th>
+										<th class="px-4 py-3 font-medium">{t(locale, 'settings.action')}</th>
+										<th class="px-4 py-3 font-medium">{t(locale, 'settings.details')}</th>
 									</tr>
 								</thead>
-								<tbody class="divide-y">
+								<tbody class="divide-y divide-border">
 									{#each data.auditLog as log}
-										<tr class="hover:bg-gray-50">
-											<td class="px-4 py-2 text-xs">{log.createdAt ? new Date(log.createdAt).toLocaleString('es-ES') : '-'}</td>
-											<td class="px-4 py-2">{log.userName ?? '-'}</td>
-											<td class="px-4 py-2 capitalize">{log.entity}</td>
-											<td class="px-4 py-2">
-												<span class="px-2 py-0.5 rounded text-xs font-bold
-													{log.action === 'create' ? 'bg-green-100 text-green-800' :
-													log.action === 'delete' ? 'bg-red-100 text-red-700' :
-													log.action === 'export' ? 'bg-blue-100 text-blue-800' :
-													'bg-gray-100 text-gray-700'}">
-													{log.action}
+										<tr class="hover:bg-surface-sunken/50 transition-colors">
+											<td class="px-4 py-3 text-xs text-text-muted">{log.createdAt ? new Date(log.createdAt).toLocaleString(locale) : '-'}</td>
+											<td class="px-4 py-3 text-text-secondary">{log.userName ?? '-'}</td>
+											<td class="px-4 py-3 text-text-secondary">{translateEntity(log.entity)}</td>
+											<td class="px-4 py-3">
+												<span class="px-2 py-0.5 rounded-md text-[11px] font-medium
+													{log.action === 'create' ? 'bg-success/8 text-success' :
+													log.action === 'delete' ? 'bg-danger/8 text-danger' :
+													log.action === 'export' ? 'bg-info/8 text-info' :
+													'bg-surface-sunken text-text-secondary'}">
+													{translateAction(log.action)}
 												</span>
 											</td>
-											<td class="px-4 py-2 text-xs text-gray-500 max-w-xs truncate">
-												{log.details && typeof log.details === 'object' ? JSON.stringify(log.details).slice(0, 80) : '-'}
-											</td>
+											<td class="px-4 py-3 text-xs text-text-muted max-w-xs truncate">{formatAuditDetails(log.details)}</td>
 										</tr>
 									{/each}
 								</tbody>
 							</table>
 						</div>
 					{:else}
-						<p class="text-gray-400 text-sm">Sin registros de auditoría</p>
+						<p class="px-6 py-12 text-center text-text-muted text-sm">{t(locale, 'settings.no_audit')}</p>
 					{/if}
 				</div>
 			{/if}
 
-			<!-- Templates -->
 			{#if activeSection === 'templates' && isAdmin}
-				<div class="space-y-6">
-					<div class="bg-white rounded-lg shadow-sm p-6">
-						<h3 class="text-lg font-bold text-gray-800 mb-4">Plantillas de Inspección</h3>
-						{#if data.allInspectionTemplates.length > 0}
-							<div class="space-y-2 mb-4">
-								{#each data.allInspectionTemplates as tpl}
-									<div class="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-										<div>
-											<p class="font-semibold text-sm">{tpl.name}</p>
-											<p class="text-xs text-gray-500">{tpl.description || 'Sin descripción'}</p>
-										</div>
-										<span class="text-xs {tpl.isActive ? 'text-green-600' : 'text-gray-400'}">{tpl.isActive ? 'Activa' : 'Inactiva'}</span>
+				<div class="bg-surface rounded-xl border border-border p-6">
+					<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.inspection_templates')}</h3>
+					{#if data.allInspectionTemplates.length > 0}
+						<div class="space-y-2 mb-4">
+							{#each data.allInspectionTemplates as tpl}
+								<div class="flex items-center justify-between p-3 bg-surface-sunken rounded-lg">
+									<div>
+										<p class="text-sm font-medium text-text">{tpl.name}</p>
+										<p class="text-xs text-text-muted">{tpl.description || t(locale, 'settings.no_description')}</p>
 									</div>
-								{/each}
-							</div>
-						{:else}
-							<p class="text-sm text-gray-400 mb-4">No hay plantillas de inspección creadas.</p>
-						{/if}
-						<form method="POST" action="?/createInspectionTemplate" use:enhance class="grid grid-cols-1 gap-3">
-							<input type="text" name="name" placeholder="Nombre de la plantilla" required class="px-3 py-2 border rounded-md text-sm" />
-							<input type="text" name="description" placeholder="Descripción" class="px-3 py-2 border rounded-md text-sm" />
-							<textarea name="schema" placeholder='JSON: [&#123;"name":"campo","label":"Etiqueta","type":"select","options":["A","B"]&#125;]' rows="3" required class="px-3 py-2 border rounded-md text-sm font-mono"></textarea>
-							<button type="submit" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Crear plantilla</button>
-						</form>
-					</div>
-					<div class="bg-white rounded-lg shadow-sm p-6">
-						<h3 class="text-lg font-bold text-gray-800 mb-4">Plantillas de Certificado</h3>
-						{#if data.allCertificateTemplates.length > 0}
-							<div class="space-y-2 mb-4">
-								{#each data.allCertificateTemplates as ct}
-									<div class="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-										<div>
-											<p class="font-semibold text-sm">{ct.name}</p>
-											<p class="text-xs text-gray-500">Tipo: {ct.type}</p>
-										</div>
-										<span class="text-xs {ct.isActive ? 'text-green-600' : 'text-gray-400'}">{ct.isActive ? 'Activa' : 'Inactiva'}</span>
-									</div>
-								{/each}
-							</div>
-						{:else}
-							<p class="text-sm text-gray-400 mb-4">No hay plantillas de certificado creadas.</p>
-						{/if}
-						<form method="POST" action="?/createCertificateTemplate" use:enhance class="grid grid-cols-1 md:grid-cols-2 gap-3">
-							<select name="type" required class="px-3 py-2 border rounded-md text-sm">
-								<option value="health">Certificado Sanitario</option>
-								<option value="sterilization">Certificado Esterilización</option>
-								<option value="cer">Certificado CER</option>
-								<option value="collaborator">Credencial Colaborador</option>
-							</select>
-							<input type="text" name="name" placeholder="Nombre de la plantilla" required class="px-3 py-2 border rounded-md text-sm" />
-							<textarea name="headerHtml" placeholder="HTML cabecera (opcional)" rows="2" class="md:col-span-2 px-3 py-2 border rounded-md text-sm font-mono"></textarea>
-							<textarea name="footerHtml" placeholder="HTML pie (opcional)" rows="2" class="md:col-span-2 px-3 py-2 border rounded-md text-sm font-mono"></textarea>
-							<button type="submit" class="md:col-span-2 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Crear plantilla</button>
-						</form>
-					</div>
-				</div>
-			{/if}
-
-			<!-- Email Templates -->
-			{#if activeSection === 'email' && isAdmin}
-				<div class="space-y-6">
-					<div class="bg-white rounded-lg shadow-sm p-6">
-						<h3 class="text-lg font-bold text-gray-800 mb-4">Plantillas de Email</h3>
-						{#if data.allEmailTemplates.length > 0}
-							<div class="space-y-2 mb-4">
-								{#each data.allEmailTemplates as et}
-									<div class="p-3 bg-gray-50 rounded-md">
-										<p class="font-semibold text-sm">{et.key} — {et.subject}</p>
-										<p class="text-xs text-gray-500">{et.locale}</p>
-									</div>
-								{/each}
-							</div>
-						{:else}
-							<p class="text-sm text-gray-400 mb-4">No hay plantillas de email. Se usará el formato estándar.</p>
-						{/if}
-						<form method="POST" action="?/createEmailTemplate" use:enhance class="grid grid-cols-1 md:grid-cols-2 gap-3">
-							<select name="key" required class="px-3 py-2 border rounded-md text-sm">
-								<option value="incident_status">Cambio estado incidencia</option>
-								<option value="incident_assigned">Incidencia asignada</option>
-								<option value="adoption_status">Cambio estado adopción</option>
-								<option value="collaborator_status">Cambio estado colaborador</option>
-								<option value="welcome">Bienvenida</option>
-								<option value="password_reset">Recuperar contraseña</option>
-							</select>
-							<input type="text" name="subject" placeholder="Asunto del email" required class="px-3 py-2 border rounded-md text-sm" />
-							<textarea name="bodyHtml" placeholder={"Contenido HTML. Variables: {{nombre}}, {{estado}}, {{enlace}}"} rows="4" required class="md:col-span-2 px-3 py-2 border rounded-md text-sm font-mono"></textarea>
-							<button type="submit" class="md:col-span-2 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Crear plantilla</button>
-						</form>
-					</div>
-				</div>
-			{/if}
-
-			<!-- Data Retention -->
-			{#if activeSection === 'retention' && isAdmin}
-				<div class="bg-white rounded-lg shadow-sm p-6">
-					<h3 class="text-lg font-bold text-gray-800 mb-4">Políticas de Retención de Datos</h3>
-					<p class="text-sm text-gray-500 mb-4">Define cuánto tiempo se conservan los datos antes de anonimizarlos o eliminarlos.</p>
-					{#if data.allRetentionPolicies.length > 0}
-						<table class="w-full text-sm mb-4">
-							<thead><tr class="text-left text-xs text-gray-500 border-b"><th class="p-2">Entidad</th><th class="p-2">Retención</th><th class="p-2">Acción</th></tr></thead>
-							<tbody>
-								{#each data.allRetentionPolicies as rp}
-									<tr class="border-b"><td class="p-2 font-medium">{rp.entity}</td><td class="p-2">{rp.retentionDays} días</td><td class="p-2">{rp.action}</td></tr>
-								{/each}
-							</tbody>
-						</table>
+									<span class="text-xs font-medium {tpl.isActive ? 'text-success' : 'text-text-muted'}">{tpl.isActive ? t(locale, 'settings.active_tpl') : t(locale, 'settings.inactive_tpl')}</span>
+								</div>
+							{/each}
+						</div>
+					{:else}
+						<p class="text-sm text-text-muted mb-4">{t(locale, 'settings.no_templates')}</p>
 					{/if}
-					<form method="POST" action="?/saveRetentionPolicy" use:enhance class="grid grid-cols-1 md:grid-cols-3 gap-3">
-						<select name="entity" required class="px-3 py-2 border rounded-md text-sm">
-							<option value="colonies">Colonias</option>
-							<option value="cats">Gatos</option>
-							<option value="health_records">Registros sanitarios</option>
-							<option value="incidents">Incidencias</option>
-							<option value="collaborators">Colaboradores</option>
-							<option value="adoptions">Adopciones</option>
-							<option value="audit_logs">Logs de auditoría</option>
-							<option value="messages">Mensajes</option>
-						</select>
-						<input type="number" name="retentionDays" placeholder="Días (ej: 1825 = 5 años)" required class="px-3 py-2 border rounded-md text-sm" />
-						<select name="retentionAction" class="px-3 py-2 border rounded-md text-sm">
-							<option value="anonymize">Anonimizar</option>
-							<option value="delete">Eliminar</option>
-							<option value="archive">Archivar</option>
-						</select>
-						<button type="submit" class="md:col-span-3 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Guardar política</button>
+					<form method="POST" action="?/createInspectionTemplate" use:enhance class="grid grid-cols-1 gap-3 pt-4 border-t border-border">
+						<input type="text" name="name" placeholder={t(locale, 'settings.tpl_name_placeholder')} required class="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" />
+						<input type="text" name="description" placeholder={t(locale, 'settings.tpl_desc_placeholder')} class="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" />
+						<textarea name="schema" placeholder={t(locale, 'settings.tpl_schema_placeholder')} rows="3" required class="px-3 py-2 bg-background border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"></textarea>
+						<button type="submit" class="px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors min-h-[40px] w-fit">{t(locale, 'settings.create_template')}</button>
 					</form>
 				</div>
 			{/if}
 
-			<!-- Import/Export -->
-			{#if activeSection === 'import' && isAdmin}
-				<div class="space-y-6">
-					<div class="bg-white rounded-lg shadow-sm p-6">
-						<h3 class="text-lg font-bold text-gray-800 mb-4">Importar datos (CSV)</h3>
-						<p class="text-sm text-gray-500 mb-4">Sube un archivo CSV con los datos a importar. Debe incluir cabecera con nombres de campo.</p>
-						<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-							<select id="importEntity" class="px-3 py-2 border rounded-md text-sm">
-								<option value="colonies">Colonias</option>
-								<option value="cats">Gatos</option>
-								<option value="collaborators">Colaboradores</option>
-								<option value="health">Registros sanitarios</option>
-								<option value="incidents">Incidencias</option>
-							</select>
-							<input type="file" id="importFile" accept=".csv,.txt" class="px-3 py-2 border rounded-md text-sm" />
-							<button type="button" onclick={handleImport} class="md:col-span-2 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Importar</button>
+			{#if activeSection === 'email' && isAdmin}
+				<div class="bg-surface rounded-xl border border-border p-6">
+					<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.email_templates')}</h3>
+					{#if data.allEmailTemplates.length > 0}
+						<div class="space-y-2 mb-4">
+							{#each data.allEmailTemplates as et}
+								<div class="p-3 bg-surface-sunken rounded-lg">
+									<p class="text-sm font-medium text-text">{et.key} — {et.subject}</p>
+									<p class="text-xs text-text-muted">{et.locale}</p>
+								</div>
+							{/each}
 						</div>
-						{#if importResult}
-							<p class="mt-3 text-sm">{importResult}</p>
-						{/if}
-					</div>
-					<div class="bg-white rounded-lg shadow-sm p-6">
-						<h3 class="text-lg font-bold text-gray-800 mb-4">Exportar datos</h3>
-						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-							<a href="/api/export-full?format=json" target="_blank" class="block px-4 py-3 bg-gray-50 rounded-md text-center hover:bg-gray-100 font-semibold text-sm">📦 Exportación completa (JSON)</a>
-							<a href="/api/export-full?format=csv" target="_blank" class="block px-4 py-3 bg-gray-50 rounded-md text-center hover:bg-gray-100 font-semibold text-sm">📋 Exportación completa (CSV)</a>
-						</div>
-					</div>
+					{:else}
+						<p class="text-sm text-text-muted mb-4">{t(locale, 'settings.no_email_templates')}</p>
+					{/if}
+					<form method="POST" action="?/createEmailTemplate" use:enhance class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-border">
+						<select name="key" required class="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]">
+							<option value="incident_status">{t(locale, 'settings.email_key.incident_status')}</option>
+							<option value="incident_assigned">{t(locale, 'settings.email_key.incident_assigned')}</option>
+							<option value="adoption_status">{t(locale, 'settings.email_key.adoption_status')}</option>
+							<option value="collaborator_status">{t(locale, 'settings.email_key.collaborator_status')}</option>
+							<option value="welcome">{t(locale, 'settings.email_key.welcome')}</option>
+							<option value="password_reset">{t(locale, 'settings.email_key.password_reset')}</option>
+						</select>
+						<input type="text" name="subject" placeholder={t(locale, 'settings.email_tpl_subject')} required class="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" />
+						<textarea name="bodyHtml" placeholder={t(locale, 'settings.email_tpl_body')} rows="4" required class="md:col-span-2 px-3 py-2 bg-background border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"></textarea>
+						<button type="submit" class="md:col-span-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors min-h-[40px] w-fit">{t(locale, 'settings.create_email_template')}</button>
+					</form>
 				</div>
 			{/if}
 
-			<!-- About -->
+			{#if activeSection === 'retention' && isAdmin}
+				<div class="bg-surface rounded-xl border border-border p-6">
+					<h3 class="text-base font-semibold text-text mb-1">{t(locale, 'settings.retention_policies')}</h3>
+					<p class="text-xs text-text-muted mb-4">{t(locale, 'settings.retention_desc')}</p>
+					{#if data.allRetentionPolicies.length > 0}
+						<div class="overflow-x-auto mb-4">
+							<table class="w-full text-sm">
+								<thead class="text-left text-xs text-text-muted uppercase tracking-wide border-b border-border"><tr><th class="p-2 font-medium">{t(locale, 'settings.entity')}</th><th class="p-2 font-medium">{t(locale, 'settings.retention')}</th><th class="p-2 font-medium">{t(locale, 'settings.action')}</th></tr></thead>
+								<tbody class="divide-y divide-border">
+									{#each data.allRetentionPolicies as rp}
+										<tr><td class="p-2 font-medium text-text">{rp.entity}</td><td class="p-2 text-text-secondary">{rp.retentionDays} {t(locale, 'settings.retention_days')}</td><td class="p-2 text-text-secondary capitalize">{rp.action}</td></tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{/if}
+					<form method="POST" action="?/saveRetentionPolicy" use:enhance class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-4 border-t border-border">
+						<select name="entity" required class="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]">
+							<option value="colonies">{t(locale, 'settings.import_colonies')}</option>
+							<option value="cats">{t(locale, 'settings.import_cats')}</option>
+							<option value="health_records">{t(locale, 'settings.import_health')}</option>
+							<option value="incidents">{t(locale, 'settings.import_incidents')}</option>
+							<option value="collaborators">{t(locale, 'settings.import_collaborators')}</option>
+							<option value="adoptions">{t(locale, 'nav.adoptions')}</option>
+							<option value="audit_logs">{t(locale, 'settings.audit_log')}</option>
+							<option value="messages">{t(locale, 'nav.messages')}</option>
+						</select>
+						<input type="number" name="retentionDays" placeholder={t(locale, 'settings.retention_days_placeholder')} required class="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]" />
+						<select name="retentionAction" class="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]">
+							<option value="anonymize">{t(locale, 'settings.retention_anonymize')}</option>
+							<option value="delete">{t(locale, 'settings.retention_delete')}</option>
+							<option value="archive">{t(locale, 'settings.retention_archive')}</option>
+						</select>
+						<button type="submit" class="md:col-span-3 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors min-h-[40px] w-fit">{t(locale, 'settings.save_policy')}</button>
+					</form>
+				</div>
+			{/if}
+
 			{#if activeSection === 'about'}
-				<div class="bg-white rounded-lg shadow-sm p-6">
-					<h3 class="text-lg font-bold text-gray-800 mb-4">Acerca de la aplicación</h3>
+				<div class="bg-surface rounded-xl border border-border p-6">
+					<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.about_app')}</h3>
 					<dl class="space-y-3">
-						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Aplicación</dt><dd class="font-medium">Gestión de Colonias Felinas Urbanas</dd></div>
-						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Versión</dt><dd class="font-medium">2.0.0-saas</dd></div>
-						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Expediente</dt><dd class="font-medium">2026/CO_ASUM/0013</dd></div>
-						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Municipio</dt><dd class="font-medium">Ayuntamiento de Vitoria-Gasteiz</dd></div>
-						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Normativa</dt><dd class="font-medium">RGPD / LOPDGDD / Ley 6/1993</dd></div>
-						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Idiomas</dt><dd class="font-medium">Castellano / Euskera</dd></div>
-						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Base de datos</dt><dd class="font-medium">PostgreSQL (Neon - UE)</dd></div>
-						<div class="flex justify-between text-sm"><dt class="text-gray-500">Framework</dt><dd class="font-medium">SvelteKit + TypeScript</dd></div>
+						<div class="flex justify-between text-sm border-b border-border pb-2"><dt class="text-text-muted">{t(locale, 'settings.app_name')}</dt><dd class="font-medium text-text">{t(locale, 'settings.app_full_name')}</dd></div>
+						<div class="flex justify-between text-sm border-b border-border pb-2"><dt class="text-text-muted">{t(locale, 'settings.version')}</dt><dd class="font-medium text-text">2.0.0-saas</dd></div>
+						<div class="flex justify-between text-sm border-b border-border pb-2"><dt class="text-text-muted">{t(locale, 'settings.file_number')}</dt><dd class="font-medium text-text">2026/CO_ASUM/0013</dd></div>
+						<div class="flex justify-between text-sm border-b border-border pb-2"><dt class="text-text-muted">{t(locale, 'settings.regulation')}</dt><dd class="font-medium text-text">RGPD / LOPDGDD / Ley 6/1993</dd></div>
+						<div class="flex justify-between text-sm border-b border-border pb-2"><dt class="text-text-muted">{t(locale, 'settings.languages')}</dt><dd class="font-medium text-text">{t(locale, 'settings.lang_es')} / {t(locale, 'settings.lang_eu')} / {t(locale, 'settings.lang_ca')} / {t(locale, 'settings.lang_en')}</dd></div>
+						<div class="flex justify-between text-sm border-b border-border pb-2"><dt class="text-text-muted">{t(locale, 'settings.database')}</dt><dd class="font-medium text-text">PostgreSQL (Neon - UE)</dd></div>
+						<div class="flex justify-between text-sm"><dt class="text-text-muted">Framework</dt><dd class="font-medium text-text">SvelteKit + TypeScript</dd></div>
 					</dl>
 				</div>
 			{/if}

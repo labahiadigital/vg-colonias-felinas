@@ -12,6 +12,8 @@
 	let mapContainer: HTMLDivElement;
 	let map: any;
 	let layerGroups: Record<string, any> = {};
+	let mapReady = $state(false);
+	let showLayers = $state(false);
 
 	let layersVisible = $state({
 		colonies: true,
@@ -89,16 +91,16 @@
 
 		coloniesData.forEach((colony: any) => {
 			if (!colony.latitude || !colony.longitude) return;
-			const color = colony.status === 'monitoring' ? '#f59e0b' : colony.status === 'inactive' ? '#9ca3af' : '#2563eb';
+			const color = colony.status === 'monitoring' ? '#f59e0b' : colony.status === 'inactive' ? '#9ca3af' : '#0f766e';
 			const marker = L.marker([colony.latitude, colony.longitude], { icon: mkIcon(color, 24) })
 				.bindPopup(`
-					<div style="min-width:220px">
-						<strong>${colony.name}</strong><br>
-						<small>${colony.district ?? ''} — ${colony.classification ?? ''}</small>
-						<hr style="margin:8px 0;border:0;border-top:1px solid #eee">
-						<div style="display:flex;justify-content:space-between;font-size:12px">
-							<span>🐈 ${colony.catCount ?? 0} gatos</span>
-							<a href="/colonias/${colony.id}" style="color:#2563eb;font-weight:600">Ver ficha →</a>
+					<div style="min-width:220px;font-family:Inter,system-ui,sans-serif">
+						<strong style="font-size:14px">${colony.name}</strong><br>
+						<span style="font-size:12px;color:#52525b">${colony.district ?? ''} — ${colony.classification ?? ''}</span>
+						<hr style="margin:8px 0;border:0;border-top:1px solid #e4e4e7">
+						<div style="display:flex;justify-content:space-between;font-size:12px;align-items:center">
+							<span style="color:#52525b">${colony.catCount ?? 0} ${t(locale, 'map.cats_count')}</span>
+							<a href="/colonias/${colony.id}" style="color:#0f766e;font-weight:600;text-decoration:none">${t(locale, 'map.view_card')} →</a>
 						</div>
 					</div>
 				`);
@@ -106,28 +108,27 @@
 
 			if (colony.geojson) {
 				try {
-					L.geoJSON(colony.geojson, { style: { color: '#2563eb', weight: 2, fillOpacity: 0.1 } }).addTo(campingGroup);
-				} catch (_) { /* GeoJSON inválido */ }
+					L.geoJSON(colony.geojson, { style: { color: '#0f766e', weight: 2, fillOpacity: 0.1 } }).addTo(campingGroup);
+				} catch (_) { /* skip */ }
 			}
 		});
 
 		feedingPointsData.forEach((fp: any) => {
 			if (!fp.latitude || !fp.longitude) return;
-			L.marker([fp.latitude, fp.longitude], { icon: mkIcon('#27ae60', 14) })
-				.bindPopup(`<strong>Punto de alimentación</strong><br><small>${fp.notes ?? ''}</small>`)
+			L.marker([fp.latitude, fp.longitude], { icon: mkIcon('#10b981', 14) })
+				.bindPopup(`<strong>${t(locale, 'map.feeding_point')}</strong><br><small>${fp.notes ?? ''}</small>`)
 				.addTo(fpGroup);
 		});
 
 		incidentsData.forEach((inc: any) => {
 			if (!inc.latitude || !inc.longitude) return;
-			const pl: Record<string, string> = { high: '🔴 Alta', medium: '🟡 Media', low: '🟢 Baja', critical: '🔴 Crítica' };
 			L.marker([inc.latitude, inc.longitude], { icon: mkIcon('#ef4444', 20) })
 				.bindPopup(`
-					<div style="min-width:200px">
-						<strong>⚠️ Incidencia</strong><br>
-						<small>${inc.category} — ${pl[inc.priority] ?? inc.priority}</small>
-						<hr style="margin:6px 0;border:0;border-top:1px solid #eee">
-						<p style="font-size:12px;margin:0">${inc.description ?? ''}</p>
+					<div style="min-width:200px;font-family:Inter,system-ui,sans-serif">
+						<strong style="font-size:13px">${t(locale, 'map.incident')}</strong><br>
+						<span style="font-size:12px;color:#52525b">${inc.category} — ${inc.priority}</span>
+						<hr style="margin:6px 0;border:0;border-top:1px solid #e4e4e7">
+						<p style="font-size:12px;margin:0;color:#52525b">${inc.description ?? ''}</p>
 					</div>
 				`)
 				.addTo(incGroup);
@@ -138,14 +139,13 @@
 			}
 		});
 
-		// Zonas sensibles demo (colegios, hospitales cercanos a colonias)
 		const sensitiveZones = [
 			{ lat: 42.8480, lng: -2.6700, label: 'Centro Educativo', radius: 150 },
 			{ lat: 42.8500, lng: -2.6760, label: 'Centro de Salud', radius: 120 }
 		];
 		sensitiveZones.forEach(z => {
-			L.circle([z.lat, z.lng], { radius: z.radius, color: '#a855f7', weight: 1, fillOpacity: 0.1, dashArray: '5,5' })
-				.bindPopup(`<strong>Zona sensible</strong><br><small>${z.label}</small>`)
+			L.circle([z.lat, z.lng], { radius: z.radius, color: '#6366f1', weight: 1, fillOpacity: 0.1, dashArray: '5,5' })
+				.bindPopup(`<strong>${t(locale, 'map.sensitive_zone')}</strong><br><small>${z.label}</small>`)
 				.addTo(sensitiveGroup);
 		});
 
@@ -162,7 +162,6 @@
 		fpGroup.addTo(map);
 		incGroup.addTo(map);
 
-		// Leaflet Draw - edicion de poligonos, lineas y puntos
 		try {
 			await import('leaflet-draw');
 			const drawnItems = new L.FeatureGroup();
@@ -171,8 +170,8 @@
 			const drawControl = new (L as any).Control.Draw({
 				position: 'topright',
 				draw: {
-					polygon: { shapeOptions: { color: '#005a4d', weight: 2, fillOpacity: 0.15 } },
-					polyline: { shapeOptions: { color: '#005a4d', weight: 3 } },
+					polygon: { shapeOptions: { color: '#0f766e', weight: 2, fillOpacity: 0.15 } },
+					polyline: { shapeOptions: { color: '#0f766e', weight: 3 } },
 					marker: true,
 					circle: { shapeOptions: { color: '#f59e0b', weight: 2, fillOpacity: 0.1 } },
 					rectangle: false,
@@ -183,13 +182,11 @@
 			map.addControl(drawControl);
 
 			map.on((L as any).Draw.Event.CREATED, (e: any) => {
-				const layer = e.layer;
-				drawnItems.addLayer(layer);
-				const geojson = layer.toGeoJSON();
-				console.log('Elemento creado (GeoJSON):', JSON.stringify(geojson));
+				drawnItems.addLayer(e.layer);
 			});
-		} catch (_) { /* leaflet-draw no disponible */ }
+		} catch (_) { /* leaflet-draw not available */ }
 
+		mapReady = true;
 		setTimeout(() => map.invalidateSize(), 100);
 	});
 </script>
@@ -199,43 +196,46 @@
 	<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 </svelte:head>
 
-<div class="flex flex-col lg:flex-row h-[calc(100vh-8rem)] -m-4 lg:-m-6">
-	<aside class="w-full lg:w-72 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col p-5 gap-4 overflow-y-auto flex-shrink-0">
-		<h2 class="text-lg font-bold flex items-center gap-2">🗺️ {t(locale, 'map.layers')}</h2>
+<div class="flex flex-col lg:flex-row h-[calc(100vh-3.5rem-4rem)] lg:h-[calc(100vh-3.5rem)] -m-4 lg:-m-8">
+	<!-- Sidebar controls (desktop) -->
+	<aside class="hidden lg:flex w-72 bg-surface border-r border-border flex-col overflow-y-auto flex-shrink-0">
+		<div class="p-5 border-b border-border">
+			<h2 class="text-sm font-semibold text-text">{t(locale, 'map.layers')}</h2>
+		</div>
 
-		<div class="space-y-2">
+		<div class="p-4 space-y-2">
 			{#each [
-				{ key: 'colonies', icon: '🔵', label: `Colonias (${filteredColonies.length})` },
-				{ key: 'feedingPoints', icon: '🟢', label: `Puntos alimentación (${feedingPointsData.length})` },
-				{ key: 'incidents', icon: '🔴', label: `Incidencias (${incidentsData.length})` },
-				{ key: 'criticalZones', icon: '🔴', label: 'Zonas críticas' },
-				{ key: 'sensitiveZones', icon: '🟣', label: 'Zonas sensibles' },
-				{ key: 'campingZones', icon: '🔷', label: 'Zonas de campeo' }
+				{ key: 'colonies', color: 'bg-primary', label: `${t(locale, 'map.layer.colonies')} (${filteredColonies.length})` },
+				{ key: 'feedingPoints', color: 'bg-success', label: `${t(locale, 'map.layer.feeding_points')} (${feedingPointsData.length})` },
+				{ key: 'incidents', color: 'bg-danger', label: `${t(locale, 'map.layer.incidents')} (${incidentsData.length})` },
+				{ key: 'criticalZones', color: 'bg-danger', label: t(locale, 'map.layer.critical_zones') },
+				{ key: 'sensitiveZones', color: 'bg-accent', label: t(locale, 'map.layer.sensitive_zones') },
+				{ key: 'campingZones', color: 'bg-primary', label: t(locale, 'map.layer.camping_zones') }
 			] as layer}
-				<label for={`layer-${layer.key}`} class="flex items-center justify-between p-2.5 bg-gray-50 rounded-md border border-gray-200 cursor-pointer hover:bg-gray-100">
-					<div class="flex items-center gap-2 text-sm">
-						<span>{layer.icon}</span>
+				<label for={`layer-${layer.key}`} class="flex items-center justify-between p-2.5 bg-surface-sunken rounded-lg cursor-pointer hover:bg-border transition-colors min-h-[44px]">
+					<div class="flex items-center gap-2.5 text-sm text-text-secondary">
+						<span class="w-2.5 h-2.5 rounded-full {layer.color}"></span>
 						{layer.label}
 					</div>
-					<input type="checkbox" id={`layer-${layer.key}`} bind:checked={layersVisible[layer.key as keyof typeof layersVisible]} />
+					<input type="checkbox" id={`layer-${layer.key}`} bind:checked={layersVisible[layer.key as keyof typeof layersVisible]} class="rounded border-border text-primary focus:ring-primary/20" />
 				</label>
 			{/each}
 		</div>
 
-		<div class="border-t pt-3 space-y-3">
+		<div class="p-4 border-t border-border space-y-3">
 			<div>
-				<label for="statusFilter" class="text-xs font-bold text-gray-600">Estado</label>
-				<select id="statusFilter" bind:value={statusFilter} class="w-full px-3 py-2 border rounded-md text-sm mt-1">
-					<option value="all">Todos</option>
-					<option value="active">Activa</option>
-					<option value="monitoring">Monitorización</option>
-					<option value="inactive">Inactiva</option>
+				<label for="statusFilter" class="text-xs font-medium text-text-muted uppercase tracking-wide">{t(locale, 'map.filter.status')}</label>
+				<select id="statusFilter" bind:value={statusFilter} class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+					<option value="all">{t(locale, 'map.filter.all')}</option>
+					<option value="active">{t(locale, 'map.filter.active')}</option>
+					<option value="monitoring">{t(locale, 'map.filter.monitoring')}</option>
+					<option value="inactive">{t(locale, 'map.filter.inactive')}</option>
 				</select>
 			</div>
 			<div>
-				<label for="districtFilter" class="text-xs font-bold text-gray-600">Distrito</label>
-				<select id="districtFilter" bind:value={districtFilter} class="w-full px-3 py-2 border rounded-md text-sm mt-1">
-					<option value="all">Todos</option>
+				<label for="districtFilter" class="text-xs font-medium text-text-muted uppercase tracking-wide">{t(locale, 'map.filter.district')}</label>
+				<select id="districtFilter" bind:value={districtFilter} class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+					<option value="all">{t(locale, 'map.filter.all')}</option>
 					{#each districts as d}
 						<option value={d}>{d}</option>
 					{/each}
@@ -243,31 +243,66 @@
 			</div>
 		</div>
 
-		<div class="border-t pt-3">
-			<h3 class="text-xs font-bold text-gray-600 mb-2">Leyenda</h3>
-			<div class="space-y-1 text-xs text-gray-600">
-				<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-600"></span> Colonia activa</div>
-				<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500"></span> En seguimiento</div>
-				<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-gray-400"></span> Inactiva</div>
-				<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-600"></span> Punto alimentación</div>
-				<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span> Incidencia</div>
-			</div>
-		</div>
-
-		<div class="mt-auto pt-3 border-t text-xs text-gray-400">
-			{filteredColonies.length} colonias · {incidentsData.length} incidencias
+		<div class="mt-auto p-4 border-t border-border text-xs text-text-muted">
+			{filteredColonies.length} {t(locale, 'map.colonies_count')} · {incidentsData.length} {t(locale, 'map.incidents_count')}
 		</div>
 	</aside>
 
+	<!-- Mobile layer toggle -->
+	<button
+		onclick={() => showLayers = !showLayers}
+		class="lg:hidden absolute top-20 left-4 z-[401] px-3 py-2 bg-surface border border-border rounded-lg shadow-lg text-sm font-medium text-text-secondary min-h-[44px] inline-flex items-center gap-2"
+	>
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4"><path d="M12 2l10 6.5v7L12 22 2 15.5v-7L12 2z"/><path d="M12 22v-7"/><path d="M22 8.5l-10 7-10-7"/></svg>
+		{t(locale, 'map.layers')}
+	</button>
+
+	{#if showLayers}
+		<div class="lg:hidden fixed inset-0 z-[500]">
+			<button class="absolute inset-0 bg-black/40" onclick={() => showLayers = false} aria-label={t(locale, 'map.close')}></button>
+			<div class="absolute bottom-0 left-0 right-0 bg-surface rounded-t-2xl p-5 max-h-[70vh] overflow-y-auto safe-bottom">
+				<div class="w-10 h-1 bg-border rounded-full mx-auto mb-4"></div>
+				<h3 class="text-sm font-semibold text-text mb-3">{t(locale, 'map.layers')}</h3>
+				<div class="space-y-2">
+					{#each [
+						{ key: 'colonies', color: 'bg-primary', label: `${t(locale, 'map.layer.colonies')} (${filteredColonies.length})` },
+						{ key: 'feedingPoints', color: 'bg-success', label: t(locale, 'map.layer.feeding_points') },
+						{ key: 'incidents', color: 'bg-danger', label: `${t(locale, 'map.layer.incidents')} (${incidentsData.length})` },
+						{ key: 'criticalZones', color: 'bg-danger', label: t(locale, 'map.layer.critical_zones') },
+						{ key: 'sensitiveZones', color: 'bg-accent', label: t(locale, 'map.layer.sensitive_zones') }
+					] as layer}
+						<label class="flex items-center justify-between p-3 bg-surface-sunken rounded-lg cursor-pointer min-h-[48px]">
+							<div class="flex items-center gap-2.5 text-sm text-text-secondary">
+								<span class="w-2.5 h-2.5 rounded-full {layer.color}"></span>
+								{layer.label}
+							</div>
+							<input type="checkbox" bind:checked={layersVisible[layer.key as keyof typeof layersVisible]} class="rounded border-border text-primary focus:ring-primary/20 w-5 h-5" />
+						</label>
+					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Map container -->
 	<div class="flex-1 relative">
-		<div class="absolute top-4 left-4 right-16 z-[400]">
-			<div class="relative max-w-xs">
-				<span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+		{#if !mapReady}
+			<div class="absolute inset-0 flex items-center justify-center bg-surface-sunken">
+				<div class="flex flex-col items-center gap-2">
+					<svg class="w-6 h-6 animate-spin text-primary" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.2"/><path d="M12 2a10 10 0 019.95 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+					<span class="text-sm text-text-muted">{t(locale, 'map.loading')}</span>
+				</div>
+			</div>
+		{/if}
+
+		<div class="absolute top-4 left-4 lg:left-4 right-16 z-[400]">
+			<div class="relative max-w-xs ml-14 lg:ml-0">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
 				<input
 					type="text"
 					bind:value={searchQuery}
 					placeholder={t(locale, 'map.search')}
-					class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 shadow-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+					class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border shadow-lg bg-surface text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[44px]"
 				/>
 			</div>
 		</div>
@@ -275,11 +310,15 @@
 		<div bind:this={mapContainer} class="w-full h-full"></div>
 
 		<div class="absolute bottom-6 right-4 flex flex-col gap-3 z-[400]">
-			<a href="/colonias?new=1" class="w-12 h-12 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center text-xl hover:bg-blue-700 transition-colors" title="Añadir colonia">
-				➕
+			<a href="/colonias?new=1" class="w-12 h-12 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:bg-primary-hover transition-colors" title={t(locale, 'map.add_colony')}>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-5 h-5"><path d="M12 5v14m-7-7h14"/></svg>
 			</a>
-			<button onclick={geolocate} class="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center text-xl hover:bg-gray-50 transition-colors" title="Mi ubicación" disabled={geolocating}>
-				{geolocating ? '⏳' : '🎯'}
+			<button onclick={geolocate} disabled={geolocating} class="w-12 h-12 rounded-full bg-surface border border-border shadow-lg flex items-center justify-center hover:bg-surface-sunken transition-colors disabled:opacity-50" title={t(locale, 'map.my_location')}>
+				{#if geolocating}
+					<svg class="w-5 h-5 animate-spin text-primary" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.2"/><path d="M12 2a10 10 0 019.95 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+				{:else}
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5 text-text-secondary"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/><circle cx="12" cy="12" r="8"/></svg>
+				{/if}
 			</button>
 		</div>
 	</div>

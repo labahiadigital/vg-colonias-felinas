@@ -5,7 +5,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const formData = await request.formData();
 	const locale = formData.get('locale') as string;
 
-	if (locale === 'es' || locale === 'eu') {
+	if (['es', 'eu', 'ca', 'en'].includes(locale)) {
 		cookies.set('locale', locale, {
 			path: '/',
 			httpOnly: true,

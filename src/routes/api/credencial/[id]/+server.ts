@@ -108,7 +108,7 @@ ${c.photo ? `.avatar img { width: 100%; height: 100%; border-radius: 50%; object
     </div>
   </div>
   <div class="footer">
-    Gestión de Colonias Felinas Urbanas &middot; Verificable en ${escapeHtml(verifyUrl)}
+    Gatopolis &middot; Verificable en ${escapeHtml(verifyUrl)}
     <div class="hash">Hash: ${hash}</div>
   </div>
 </div>

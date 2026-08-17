@@ -72,7 +72,7 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 <div class="header">
 	<p style="font-size:14px;font-weight:bold;color:#005a4d">AYUNTAMIENTO DE VITORIA-GASTEIZ</p>
 	<p>Departamento de Medio Ambiente y Espacio Público</p>
-	<p>Gestión de Colonias Felinas Urbanas</p>
+	<p>Gatopolis — Colonias Felinas Urbanas</p>
 	<h1>${title}</h1>
 	<p class="cert-number">N.º ${certNumber}</p>
 	<p>Expediente: 2026/CO_ASUM/0013</p>
@@ -139,7 +139,7 @@ ${type === 'cer' ? `
 
 <div class="footer">
 	<p class="stamp">[PENDIENTE DE CONFIRMAR: Firma electrónica y validez oficial del certificado]</p>
-	<p>Documento generado el ${now} por el sistema de Gestión de Colonias Felinas de Vitoria-Gasteiz</p>
+	<p>Documento generado el ${now} por Gatopolis</p>
 	<p>Este documento tiene carácter informativo. La validez oficial queda sujeta a la firma y sello correspondientes.</p>
 </div>
 </body>

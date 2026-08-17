@@ -1,6 +1,6 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { conversations, messages, notifications, users } from '$lib/server/db/schema.js';
+import { conversations, messages, notifications, users, colonies } from '$lib/server/db/schema.js';
 import { desc, eq, and } from 'drizzle-orm';
 import { redirect, fail } from '@sveltejs/kit';
 
@@ -48,12 +48,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.from(users)
 		.orderBy(users.name);
 
+	const allColonies = await db
+		.select({ id: colonies.id, name: colonies.name })
+		.from(colonies)
+		.orderBy(colonies.name);
+
 	return {
 		locale: locals.locale,
 		currentUserId: locals.user.id,
 		conversations: convosWithLastMessage,
 		notifications: userNotifications,
-		users: allUsers
+		users: allUsers,
+		colonies: allColonies
 	};
 };
 
@@ -63,6 +69,10 @@ export const actions: Actions = {
 		const fd = await request.formData();
 
 		const title = fd.get('title') as string;
+		const type = (fd.get('type') as string) || 'direct';
+		const colonyId = fd.get('colonyId') as string;
+		const zone = fd.get('zone') as string;
+		const roleFilter = fd.get('roleFilter') as string;
 		const participantIds = fd.getAll('participants') as string[];
 
 		if (!title) return fail(400, { error: 'Título obligatorio' });
@@ -71,6 +81,10 @@ export const actions: Actions = {
 
 		await db.insert(conversations).values({
 			title,
+			type,
+			colonyId: colonyId || null,
+			zone: zone || null,
+			roleFilter: roleFilter || null,
 			participants: allParticipants
 		});
 
