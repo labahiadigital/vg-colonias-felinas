@@ -3,9 +3,15 @@ import { db } from '$lib/server/db/index.js';
 import { collaborators, colonies } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
+import { createHash, randomBytes } from 'crypto';
+import { env } from '$env/dynamic/private';
 
 function escapeHtml(text: string): string {
 	return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function generateVerificationHash(id: string, name: string): string {
+	return createHash('sha256').update(`${id}:${name}:${randomBytes(8).toString('hex')}`).digest('hex').slice(0, 32);
 }
 
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -16,11 +22,23 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	if (col[0].status !== 'active') throw error(403, 'Credencial solo disponible para colaboradores activos');
 
 	const c = col[0];
+
+	let hash = c.verificationHash;
+	if (!hash) {
+		hash = generateVerificationHash(c.id, c.name);
+		await db.update(collaborators).set({ verificationHash: hash }).where(eq(collaborators.id, c.id));
+	}
+
+	const baseUrl = env.BETTER_AUTH_URL || 'http://localhost:5173';
+	const verifyUrl = `${baseUrl}/api/verificar/${hash}`;
+
 	const allColonies = await db.select({ id: colonies.id, name: colonies.name }).from(colonies);
 	const colonyMap = new Map(allColonies.map(co => [co.id, co.name]));
 	const assignedNames = Array.isArray(c.assignedColonies)
 		? (c.assignedColonies as string[]).map(id => colonyMap.get(id) ?? id)
 		: [];
+
+	const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(verifyUrl)}`;
 
 	const html = `<!DOCTYPE html>
 <html lang="es">
@@ -30,49 +48,68 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 <style>
 @page { size: A5 portrait; margin: 1cm; }
 body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; background: #fff; }
-.card { border: 3px solid #1e40af; border-radius: 16px; overflow: hidden; max-width: 380px; margin: 0 auto; }
-.header { background: linear-gradient(135deg, #1e40af, #3b82f6); color: #fff; text-align: center; padding: 16px; }
-.header h1 { font-size: 14px; margin: 0; }
+.card { border: 3px solid #005a4d; border-radius: 16px; overflow: hidden; max-width: 380px; margin: 0 auto; }
+.header { background: linear-gradient(135deg, #005a4d, #00897b); color: #fff; text-align: center; padding: 16px; }
+.header h1 { font-size: 14px; margin: 0; letter-spacing: 0.5px; }
 .header h2 { font-size: 11px; margin: 4px 0 0; opacity: 0.85; }
-.header p { font-size: 9px; margin: 6px 0 0; opacity: 0.7; }
+.header p { font-size: 10px; margin: 6px 0 0; opacity: 0.8; font-weight: 600; letter-spacing: 1px; }
 .body { padding: 20px; text-align: center; }
-.avatar { width: 80px; height: 80px; border-radius: 50%; background: #dbeafe; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; color: #1e40af; margin: 0 auto 12px; }
+.avatar { width: 80px; height: 80px; border-radius: 50%; background: #e0f2f1; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; color: #005a4d; margin: 0 auto 12px; border: 3px solid #005a4d; }
+${c.photo ? `.avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }` : ''}
 .name { font-size: 18px; font-weight: bold; color: #1f2937; }
-.id { font-size: 10px; color: #6b7280; margin-top: 4px; font-family: monospace; }
-.qr { margin: 16px auto; width: 120px; height: 120px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.qr-icon { font-size: 32px; }
-.qr-text { font-size: 8px; color: #9ca3af; }
-.qr-code { font-size: 7px; font-family: monospace; color: #6b7280; margin-top: 4px; }
-.info { margin-top: 12px; font-size: 11px; color: #374151; }
-.info p { margin: 4px 0; }
-.info .label { font-weight: 600; }
-.footer { background: #f9fafb; text-align: center; padding: 8px; font-size: 8px; color: #9ca3af; }
+.doc-id { font-size: 11px; color: #6b7280; margin-top: 2px; }
+.cred-id { font-size: 9px; color: #9ca3af; font-family: monospace; margin-top: 2px; }
+.qr { margin: 16px auto; }
+.qr img { border-radius: 8px; border: 1px solid #e5e7eb; }
+.verify-url { font-size: 8px; color: #9ca3af; word-break: break-all; margin-top: 4px; max-width: 200px; margin-left: auto; margin-right: auto; }
+.info { margin-top: 12px; font-size: 11px; color: #374151; text-align: left; padding: 0 8px; }
+.info-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f3f4f6; }
+.info-label { font-weight: 600; color: #555; }
+.info-value { color: #111; }
+.status-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 700; background: #dcfce7; color: #16a34a; }
+.footer { background: #f8faf9; text-align: center; padding: 10px; font-size: 8px; color: #999; border-top: 1px solid #e5e7eb; }
+.hash { font-family: monospace; font-size: 8px; color: #aaa; margin-top: 4px; }
+@media print { body { padding: 0; } }
 </style>
 </head>
 <body>
 <div class="card">
   <div class="header">
-    <h1>AYUNTAMIENTO DE VITORIA-GASTEIZ</h1>
-    <h2>GASTEIZKO UDALA</h2>
-    <p>Credencial de Persona Colaboradora Autorizada</p>
+    <h1>CREDENCIAL DE PERSONA COLABORADORA</h1>
+    <h2>LAGUNTZAILE PERTSONAREN EGIAZTAGIRIA</h2>
+    <p>COLONIAS FELINAS URBANAS</p>
   </div>
   <div class="body">
-    <div class="avatar">${escapeHtml(c.name.charAt(0))}</div>
+    <div class="avatar">${c.photo ? `<img src="${c.photo}" alt="${escapeHtml(c.name)}">` : escapeHtml(c.name.charAt(0))}</div>
     <div class="name">${escapeHtml(c.name)}</div>
-    <div class="id">ID: ${c.id.slice(0, 8).toUpperCase()}</div>
+    ${c.documentId ? `<div class="doc-id">${escapeHtml(c.documentId)}</div>` : ''}
+    <div class="cred-id">CRED-${c.id.slice(0, 8).toUpperCase()}</div>
     <div class="qr">
-      <div class="qr-icon">📱</div>
-      <div class="qr-text">Código QR de verificación</div>
-      <div class="qr-code">${c.id.slice(0, 16)}</div>
+      <img src="${qrApiUrl}" alt="QR de verificación" width="140" height="140" />
+      <div class="verify-url">Escanear para verificar autenticidad</div>
     </div>
     <div class="info">
-      <p><span class="label">Colonias:</span> ${escapeHtml(assignedNames.join(', ') || 'Sin asignar')}</p>
-      <p><span class="label">Válida hasta:</span> ${c.validUntil ?? 'Sin fecha definida'}</p>
-      <p><span class="label">LOPD:</span> ${c.privacyNoticeSigned ? 'Aceptada' : 'Pendiente'}</p>
+      <div class="info-row">
+        <span class="info-label">Estado</span>
+        <span class="status-badge">ACTIVO/A</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Colonias asignadas</span>
+        <span class="info-value">${escapeHtml(assignedNames.join(', ') || 'Sin asignar')}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Válida hasta</span>
+        <span class="info-value">${c.validUntil ? new Date(c.validUntil).toLocaleDateString('es-ES') : 'Sin fecha límite'}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">LOPD firmada</span>
+        <span class="info-value">${c.privacyNoticeSigned ? 'Sí' : 'Pendiente'}</span>
+      </div>
     </div>
   </div>
   <div class="footer">
-    Gestión de Colonias Felinas Urbanas &middot; Exp. 2026/CO_ASUM/0013 &middot; [PENDIENTE DE CONFIRMAR: formato, firma y validez de la credencial]
+    Gestión de Colonias Felinas Urbanas &middot; Verificable en ${escapeHtml(verifyUrl)}
+    <div class="hash">Hash: ${hash}</div>
   </div>
 </div>
 </body>
@@ -81,7 +118,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px;
 	return new Response(html, {
 		headers: {
 			'Content-Type': 'text/html; charset=utf-8',
-			'Content-Disposition': `attachment; filename="credencial-${c.id.slice(0, 8)}.html"`
+			'Content-Disposition': `inline; filename="credencial-${c.id.slice(0, 8)}.html"`
 		}
 	});
 };

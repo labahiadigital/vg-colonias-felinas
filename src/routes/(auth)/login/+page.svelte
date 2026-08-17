@@ -115,7 +115,16 @@
 			</div>
 		</div>
 
-		<p class="text-center text-xs text-gray-400 mt-6">
+		<div class="text-center mt-6">
+			<a href="/registro" class="text-sm text-primary font-semibold hover:underline">¿Nueva entidad? Registrar organización</a>
+		</div>
+		<div class="flex justify-center gap-4 mt-4 text-xs text-gray-400">
+			<a href="/privacidad" class="hover:text-gray-600 hover:underline">Privacidad</a>
+			<span>·</span>
+			<a href="/terminos" class="hover:text-gray-600 hover:underline">Términos</a>
+		</div>
+
+		<p class="text-center text-xs text-gray-400 mt-3">
 			{t(locale, 'app.expediente')} - {t(locale, 'app.title')}
 		</p>
 	</div>

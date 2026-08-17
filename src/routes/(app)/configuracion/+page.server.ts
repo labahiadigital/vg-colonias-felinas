@@ -1,6 +1,6 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { users, userRoles, roles, permissions, rolePermissions, catalogs, auditLogs } from '$lib/server/db/schema.js';
+import { users, userRoles, roles, permissions, rolePermissions, catalogs, auditLogs, inspectionTemplates, certificateTemplates, emailTemplates, dataRetentionPolicies } from '$lib/server/db/schema.js';
 import { eq, desc, asc } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { hasPermission } from '$lib/server/rbac.js';
@@ -44,6 +44,19 @@ export const load: PageServerLoad = async ({ locals }) => {
 		allCatalogs = await db.select().from(catalogs).orderBy(asc(catalogs.type), asc(catalogs.sortOrder));
 	}
 
+	const allInspectionTemplates = isAdmin
+		? await db.select().from(inspectionTemplates).orderBy(asc(inspectionTemplates.name))
+		: [];
+	const allCertificateTemplates = isAdmin
+		? await db.select().from(certificateTemplates).orderBy(asc(certificateTemplates.type))
+		: [];
+	const allEmailTemplates = isAdmin
+		? await db.select().from(emailTemplates).orderBy(asc(emailTemplates.key))
+		: [];
+	const allRetentionPolicies = isAdmin
+		? await db.select().from(dataRetentionPolicies).orderBy(asc(dataRetentionPolicies.entity))
+		: [];
+
 	const recentAudit = await db
 		.select({
 			id: auditLogs.id,
@@ -68,6 +81,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		allPermissions,
 		allRolePermissions,
 		allCatalogs,
+		allInspectionTemplates,
+		allCertificateTemplates,
+		allEmailTemplates,
+		allRetentionPolicies,
 		auditLog: recentAudit
 	};
 };
@@ -163,5 +180,77 @@ export const actions: Actions = {
 
 		await logAudit({ userId: locals.user.id, entity: 'catalog', entityId: key, action: 'create', details: { type, label } });
 		return { catalogCreated: true };
+	},
+
+	createInspectionTemplate: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const name = fd.get('name') as string;
+		const description = fd.get('description') as string;
+		const schemaStr = fd.get('schema') as string;
+
+		if (!name || !schemaStr) return fail(400, { error: 'Nombre y esquema son obligatorios' });
+
+		let schema;
+		try { schema = JSON.parse(schemaStr); } catch { return fail(400, { error: 'JSON de esquema no válido' }); }
+
+		await db.insert(inspectionTemplates).values({ name, description: description || null, schema });
+		await logAudit({ userId: locals.user.id, entity: 'inspection_template', entityId: name, action: 'create' });
+		return { templateCreated: true };
+	},
+
+	createCertificateTemplate: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const type = fd.get('type') as string;
+		const name = fd.get('name') as string;
+		const headerHtml = fd.get('headerHtml') as string;
+		const footerHtml = fd.get('footerHtml') as string;
+
+		if (!type || !name) return fail(400, { error: 'Tipo y nombre son obligatorios' });
+
+		await db.insert(certificateTemplates).values({
+			type, name, headerHtml: headerHtml || null, footerHtml: footerHtml || null
+		});
+		await logAudit({ userId: locals.user.id, entity: 'certificate_template', entityId: name, action: 'create' });
+		return { certTemplateCreated: true };
+	},
+
+	createEmailTemplate: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const key = fd.get('key') as string;
+		const subject = fd.get('subject') as string;
+		const bodyHtml = fd.get('bodyHtml') as string;
+
+		if (!key || !subject || !bodyHtml) return fail(400, { error: 'Clave, asunto y contenido son obligatorios' });
+
+		await db.insert(emailTemplates).values({ key, subject, bodyHtml });
+		await logAudit({ userId: locals.user.id, entity: 'email_template', entityId: key, action: 'create' });
+		return { emailTemplateCreated: true };
+	},
+
+	saveRetentionPolicy: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
+
+		const fd = await request.formData();
+		const entity = fd.get('entity') as string;
+		const retentionDays = Number(fd.get('retentionDays'));
+		const action = fd.get('retentionAction') as string;
+
+		if (!entity || !retentionDays) return fail(400, { error: 'Datos incompletos' });
+
+		await db.insert(dataRetentionPolicies).values({
+			entity, retentionDays, action: action || 'anonymize'
+		});
+		await logAudit({ userId: locals.user.id, entity: 'retention_policy', entityId: entity, action: 'create', details: { retentionDays, retentionAction: action } });
+		return { retentionSaved: true };
 	}
 };

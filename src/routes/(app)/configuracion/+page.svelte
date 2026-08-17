@@ -9,6 +9,27 @@
 
 	let activeSection = $state('profile');
 	let isAdmin = $derived(data.isAdmin);
+	let importResult = $state('');
+
+	async function handleImport() {
+		const entity = (document.getElementById('importEntity') as HTMLSelectElement)?.value;
+		const fileInput = document.getElementById('importFile') as HTMLInputElement;
+		const file = fileInput?.files?.[0];
+		if (!file) { importResult = 'Selecciona un archivo'; return; }
+		const fd = new FormData();
+		fd.append('file', file);
+		fd.append('entity', entity);
+		importResult = 'Importando...';
+		try {
+			const res = await fetch('/api/import', { method: 'POST', body: fd });
+			const d = await res.json();
+			if (d.success) {
+				importResult = `Importados: ${d.imported}/${d.totalRows}` + (d.errors?.length > 0 ? ` (${d.errors.length} errores)` : '');
+			} else {
+				importResult = d.error || 'Error';
+			}
+		} catch { importResult = 'Error de conexión'; }
+	}
 
 	let sections = $derived([
 		{ id: 'profile', label: 'Mi Perfil', icon: '👤' },
@@ -18,6 +39,10 @@
 			{ id: 'users', label: 'Usuarios', icon: '👥' },
 			{ id: 'roles', label: 'Roles y Permisos', icon: '🔑' },
 			{ id: 'catalogs', label: 'Catálogos', icon: '📋' },
+			{ id: 'templates', label: 'Plantillas', icon: '📝' },
+			{ id: 'email', label: 'Email y Notif.', icon: '📧' },
+			{ id: 'retention', label: 'Retención', icon: '🗄️' },
+			{ id: 'import', label: 'Importar/Exportar', icon: '📦' },
 			{ id: 'audit', label: 'Auditoría', icon: '📜' }
 		] : []),
 		{ id: 'about', label: 'Acerca de', icon: 'ℹ️' }
@@ -362,13 +387,175 @@
 				</div>
 			{/if}
 
+			<!-- Templates -->
+			{#if activeSection === 'templates' && isAdmin}
+				<div class="space-y-6">
+					<div class="bg-white rounded-lg shadow-sm p-6">
+						<h3 class="text-lg font-bold text-gray-800 mb-4">Plantillas de Inspección</h3>
+						{#if data.allInspectionTemplates.length > 0}
+							<div class="space-y-2 mb-4">
+								{#each data.allInspectionTemplates as tpl}
+									<div class="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+										<div>
+											<p class="font-semibold text-sm">{tpl.name}</p>
+											<p class="text-xs text-gray-500">{tpl.description || 'Sin descripción'}</p>
+										</div>
+										<span class="text-xs {tpl.isActive ? 'text-green-600' : 'text-gray-400'}">{tpl.isActive ? 'Activa' : 'Inactiva'}</span>
+									</div>
+								{/each}
+							</div>
+						{:else}
+							<p class="text-sm text-gray-400 mb-4">No hay plantillas de inspección creadas.</p>
+						{/if}
+						<form method="POST" action="?/createInspectionTemplate" use:enhance class="grid grid-cols-1 gap-3">
+							<input type="text" name="name" placeholder="Nombre de la plantilla" required class="px-3 py-2 border rounded-md text-sm" />
+							<input type="text" name="description" placeholder="Descripción" class="px-3 py-2 border rounded-md text-sm" />
+							<textarea name="schema" placeholder='JSON: [&#123;"name":"campo","label":"Etiqueta","type":"select","options":["A","B"]&#125;]' rows="3" required class="px-3 py-2 border rounded-md text-sm font-mono"></textarea>
+							<button type="submit" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Crear plantilla</button>
+						</form>
+					</div>
+					<div class="bg-white rounded-lg shadow-sm p-6">
+						<h3 class="text-lg font-bold text-gray-800 mb-4">Plantillas de Certificado</h3>
+						{#if data.allCertificateTemplates.length > 0}
+							<div class="space-y-2 mb-4">
+								{#each data.allCertificateTemplates as ct}
+									<div class="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+										<div>
+											<p class="font-semibold text-sm">{ct.name}</p>
+											<p class="text-xs text-gray-500">Tipo: {ct.type}</p>
+										</div>
+										<span class="text-xs {ct.isActive ? 'text-green-600' : 'text-gray-400'}">{ct.isActive ? 'Activa' : 'Inactiva'}</span>
+									</div>
+								{/each}
+							</div>
+						{:else}
+							<p class="text-sm text-gray-400 mb-4">No hay plantillas de certificado creadas.</p>
+						{/if}
+						<form method="POST" action="?/createCertificateTemplate" use:enhance class="grid grid-cols-1 md:grid-cols-2 gap-3">
+							<select name="type" required class="px-3 py-2 border rounded-md text-sm">
+								<option value="health">Certificado Sanitario</option>
+								<option value="sterilization">Certificado Esterilización</option>
+								<option value="cer">Certificado CER</option>
+								<option value="collaborator">Credencial Colaborador</option>
+							</select>
+							<input type="text" name="name" placeholder="Nombre de la plantilla" required class="px-3 py-2 border rounded-md text-sm" />
+							<textarea name="headerHtml" placeholder="HTML cabecera (opcional)" rows="2" class="md:col-span-2 px-3 py-2 border rounded-md text-sm font-mono"></textarea>
+							<textarea name="footerHtml" placeholder="HTML pie (opcional)" rows="2" class="md:col-span-2 px-3 py-2 border rounded-md text-sm font-mono"></textarea>
+							<button type="submit" class="md:col-span-2 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Crear plantilla</button>
+						</form>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Email Templates -->
+			{#if activeSection === 'email' && isAdmin}
+				<div class="space-y-6">
+					<div class="bg-white rounded-lg shadow-sm p-6">
+						<h3 class="text-lg font-bold text-gray-800 mb-4">Plantillas de Email</h3>
+						{#if data.allEmailTemplates.length > 0}
+							<div class="space-y-2 mb-4">
+								{#each data.allEmailTemplates as et}
+									<div class="p-3 bg-gray-50 rounded-md">
+										<p class="font-semibold text-sm">{et.key} — {et.subject}</p>
+										<p class="text-xs text-gray-500">{et.locale}</p>
+									</div>
+								{/each}
+							</div>
+						{:else}
+							<p class="text-sm text-gray-400 mb-4">No hay plantillas de email. Se usará el formato estándar.</p>
+						{/if}
+						<form method="POST" action="?/createEmailTemplate" use:enhance class="grid grid-cols-1 md:grid-cols-2 gap-3">
+							<select name="key" required class="px-3 py-2 border rounded-md text-sm">
+								<option value="incident_status">Cambio estado incidencia</option>
+								<option value="incident_assigned">Incidencia asignada</option>
+								<option value="adoption_status">Cambio estado adopción</option>
+								<option value="collaborator_status">Cambio estado colaborador</option>
+								<option value="welcome">Bienvenida</option>
+								<option value="password_reset">Recuperar contraseña</option>
+							</select>
+							<input type="text" name="subject" placeholder="Asunto del email" required class="px-3 py-2 border rounded-md text-sm" />
+							<textarea name="bodyHtml" placeholder={"Contenido HTML. Variables: {{nombre}}, {{estado}}, {{enlace}}"} rows="4" required class="md:col-span-2 px-3 py-2 border rounded-md text-sm font-mono"></textarea>
+							<button type="submit" class="md:col-span-2 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Crear plantilla</button>
+						</form>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Data Retention -->
+			{#if activeSection === 'retention' && isAdmin}
+				<div class="bg-white rounded-lg shadow-sm p-6">
+					<h3 class="text-lg font-bold text-gray-800 mb-4">Políticas de Retención de Datos</h3>
+					<p class="text-sm text-gray-500 mb-4">Define cuánto tiempo se conservan los datos antes de anonimizarlos o eliminarlos.</p>
+					{#if data.allRetentionPolicies.length > 0}
+						<table class="w-full text-sm mb-4">
+							<thead><tr class="text-left text-xs text-gray-500 border-b"><th class="p-2">Entidad</th><th class="p-2">Retención</th><th class="p-2">Acción</th></tr></thead>
+							<tbody>
+								{#each data.allRetentionPolicies as rp}
+									<tr class="border-b"><td class="p-2 font-medium">{rp.entity}</td><td class="p-2">{rp.retentionDays} días</td><td class="p-2">{rp.action}</td></tr>
+								{/each}
+							</tbody>
+						</table>
+					{/if}
+					<form method="POST" action="?/saveRetentionPolicy" use:enhance class="grid grid-cols-1 md:grid-cols-3 gap-3">
+						<select name="entity" required class="px-3 py-2 border rounded-md text-sm">
+							<option value="colonies">Colonias</option>
+							<option value="cats">Gatos</option>
+							<option value="health_records">Registros sanitarios</option>
+							<option value="incidents">Incidencias</option>
+							<option value="collaborators">Colaboradores</option>
+							<option value="adoptions">Adopciones</option>
+							<option value="audit_logs">Logs de auditoría</option>
+							<option value="messages">Mensajes</option>
+						</select>
+						<input type="number" name="retentionDays" placeholder="Días (ej: 1825 = 5 años)" required class="px-3 py-2 border rounded-md text-sm" />
+						<select name="retentionAction" class="px-3 py-2 border rounded-md text-sm">
+							<option value="anonymize">Anonimizar</option>
+							<option value="delete">Eliminar</option>
+							<option value="archive">Archivar</option>
+						</select>
+						<button type="submit" class="md:col-span-3 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Guardar política</button>
+					</form>
+				</div>
+			{/if}
+
+			<!-- Import/Export -->
+			{#if activeSection === 'import' && isAdmin}
+				<div class="space-y-6">
+					<div class="bg-white rounded-lg shadow-sm p-6">
+						<h3 class="text-lg font-bold text-gray-800 mb-4">Importar datos (CSV)</h3>
+						<p class="text-sm text-gray-500 mb-4">Sube un archivo CSV con los datos a importar. Debe incluir cabecera con nombres de campo.</p>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+							<select id="importEntity" class="px-3 py-2 border rounded-md text-sm">
+								<option value="colonies">Colonias</option>
+								<option value="cats">Gatos</option>
+								<option value="collaborators">Colaboradores</option>
+								<option value="health">Registros sanitarios</option>
+								<option value="incidents">Incidencias</option>
+							</select>
+							<input type="file" id="importFile" accept=".csv,.txt" class="px-3 py-2 border rounded-md text-sm" />
+							<button type="button" onclick={handleImport} class="md:col-span-2 px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">Importar</button>
+						</div>
+						{#if importResult}
+							<p class="mt-3 text-sm">{importResult}</p>
+						{/if}
+					</div>
+					<div class="bg-white rounded-lg shadow-sm p-6">
+						<h3 class="text-lg font-bold text-gray-800 mb-4">Exportar datos</h3>
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							<a href="/api/export-full?format=json" target="_blank" class="block px-4 py-3 bg-gray-50 rounded-md text-center hover:bg-gray-100 font-semibold text-sm">📦 Exportación completa (JSON)</a>
+							<a href="/api/export-full?format=csv" target="_blank" class="block px-4 py-3 bg-gray-50 rounded-md text-center hover:bg-gray-100 font-semibold text-sm">📋 Exportación completa (CSV)</a>
+						</div>
+					</div>
+				</div>
+			{/if}
+
 			<!-- About -->
 			{#if activeSection === 'about'}
 				<div class="bg-white rounded-lg shadow-sm p-6">
 					<h3 class="text-lg font-bold text-gray-800 mb-4">Acerca de la aplicación</h3>
 					<dl class="space-y-3">
 						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Aplicación</dt><dd class="font-medium">Gestión de Colonias Felinas Urbanas</dd></div>
-						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Versión</dt><dd class="font-medium">1.1.0</dd></div>
+						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Versión</dt><dd class="font-medium">2.0.0-saas</dd></div>
 						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Expediente</dt><dd class="font-medium">2026/CO_ASUM/0013</dd></div>
 						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Municipio</dt><dd class="font-medium">Ayuntamiento de Vitoria-Gasteiz</dd></div>
 						<div class="flex justify-between text-sm border-b pb-2"><dt class="text-gray-500">Normativa</dt><dd class="font-medium">RGPD / LOPDGDD / Ley 6/1993</dd></div>

@@ -1,8 +1,22 @@
-# Gestión de Colonias Felinas Urbanas - Vitoria-Gasteiz
+# Gestión de Colonias Felinas Urbanas — SaaS Multi-tenant
 
-Aplicación web responsive para la gestión integral de colonias felinas urbanas del Ayuntamiento de Vitoria-Gasteiz.
+Plataforma SaaS responsive para la gestión integral de colonias felinas urbanas, diseñada para ayuntamientos, diputaciones, asociaciones protectoras y entidades gestoras.
 
-**Expediente:** 2026/CO_ASUM/0013
+**Versión:** 2.0.0-saas
+**Expediente inicial:** 2026/CO_ASUM/0013 (Vitoria-Gasteiz)
+
+## Arquitectura SaaS
+
+| Aspecto | Decisión |
+|---|---|
+| **Multi-tenancy** | Aislamiento por `organizationId` en todas las tablas |
+| **Onboarding** | Registro de organización + primer administrador |
+| **Planes** | Standard (50 usuarios), Professional (ilimitados, SMTP propio), Enterprise (on-premise) |
+| **Cartografía** | OpenStreetMap (libre, abierto, sin costes de licencia) |
+| **WCAG** | 2.1 AA |
+| **Navegadores** | Últimas 2 versiones de Chrome, Firefox, Safari, Edge |
+| **RPO / RTO** | < 24h / < 4h |
+| **Disponibilidad** | 99,5% mensual |
 
 ## Stack Tecnológico
 
@@ -12,158 +26,173 @@ Aplicación web responsive para la gestión integral de colonias felinas urbanas
 | CSS | Tailwind CSS 4 |
 | Base de datos | PostgreSQL (Neon, UE) |
 | ORM | Drizzle ORM |
-| Autenticación | Better Auth |
-| Mapas | Leaflet + OpenStreetMap |
+| Autenticación | Better Auth (rate limited, min 8 chars) |
+| Mapas | Leaflet + Leaflet Draw + OpenStreetMap |
+| Email | SMTP genérico (configurable por organización) |
 | Idiomas | ES (Castellano) + EU (Euskera) |
 | Validación | Zod |
 
 ## Módulos Funcionales
 
 ### 1. Dashboard
-Panel principal con KPIs en tiempo real, actividad reciente, y accesos rápidos a todos los módulos.
+KPIs en tiempo real, actividad reciente, accesos rápidos a todos los módulos.
 
 ### 2. Cartografía y Geolocalización
-- Mapa interactivo con capas editables: colonias, puntos de alimentación, incidencias, zonas críticas, zonas sensibles, zonas de campeo.
-- Activar/desactivar capas individualmente.
-- Filtros por estado y distrito.
-- Geolocalización automática desde dispositivo móvil.
-- Navegación desde el mapa a fichas de cada elemento.
+- Mapa interactivo con capas editables (colonias, puntos de alimentación, incidencias, zonas críticas/sensibles/campeo).
+- **Leaflet Draw** para crear/editar polígonos, líneas y puntos con exportación GeoJSON.
+- Filtros por estado y distrito. Geolocalización automática desde móvil.
 
 ### 3. Gestión de Colonias
-- CRUD completo con identificador único.
-- Ficha detallada con geolocalización, estado, clasificación, zonas de campeo.
-- Asociación con gatos, puntos de alimentación, incidencias y acciones CER.
-- Historial de cambios vía auditoría.
-- Confirmación para acciones destructivas.
+CRUD completo, ficha detallada con geolocalización, asociación con gatos/incidencias/CER, historial de auditoría, confirmación para acciones destructivas.
 
 ### 4. Censo Individual de Gatos
-- Ficha individual con fotografía, sexo, estado, esterilización, microchip.
-- Historial sanitario completo (vacunaciones, desparasitaciones, cirugías).
-- Relación con colonia, adopciones y acciones CER.
-- Trazabilidad cronológica.
+Ficha con **fotografía** (subida directa + cámara móvil), sexo, microchip, estado, historial sanitario, CER, adopciones. Certificados generables desde ficha.
 
 ### 5. Salud Animal
-- Registros sanitarios: vacunación, esterilización, desparasitación, microchip, cirugía, revisión.
-- Búsqueda y filtros por tipo de actuación.
-- Vinculación con gato y colonia.
-- Identificación del veterinario/clínica.
+Vacunación, esterilización, desparasitación, microchip, cirugía, revisión. Vinculación con gato/colonia. Identificación veterinario/clínica.
 
-### 6. Programa CER (Captura-Esterilización-Retorno)
-- Registro de actuaciones de captura, esterilización y retorno.
-- Relación con animal y colonia.
-- Indicadores de estado por fases.
-- Tabla con historial evolutivo.
+### 6. Programa CER
+Captura-Esterilización-Retorno. Relación animal/colonia. Indicadores por fases.
 
 ### 7. Incidencias y Quejas
-- Registro geolocalizado con captura automática de coordenadas.
-- Categorización, prioridad (crítica/alta/media/baja) y estado configurable.
-- Asignación de responsable.
-- Historial de comentarios y actuaciones.
-- Filtros avanzados por estado, prioridad y categoría.
-- Alertas visuales según prioridad.
+Geolocalización automática, categorización, prioridad, asignación de responsable con **notificación automática**, historial de comentarios, **adjuntar fotografías**.
 
 ### 8. Inspecciones
-- Plantillas de inspección configurables.
-- Formulario móvil con campos de evaluación rápida.
-- Asociación con colonias.
-- Registro de resultados estructurados y observaciones.
+**Plantillas configurables** de inspección (JSON schema). Formulario móvil con evaluación rápida. Resultados estructurados.
 
 ### 9. Colaboradores
-- Registro, aprobación/rechazo, alta/baja.
-- Credencial digital con QR.
-- Exportación PDF de credencial.
-- Gestión LOPD (firma de información de privacidad).
-- Asociación con colonias.
+Registro/aprobación, **credencial digital con QR verificable** (hash SHA-256), verificación pública vía `/api/verificar/[hash]`, gestión LOPD, notificaciones de cambio de estado.
 
-### 10. Adopciones y Trazabilidad
-- Flujo completo: registro → aprobación → completar.
-- Datos del adoptante con restricción de acceso.
-- Consentimiento informado.
-- Trazabilidad del cambio de estado del animal.
+### 10. Adopciones
+Flujo completo con cambio automático de estado del gato. Consentimiento informado. Notificaciones.
 
-### 11. Comunicaciones y Notificaciones
-- Chat interno con conversaciones por participantes.
-- Carga de mensajes en tiempo real.
-- Notificaciones segmentadas por usuario.
-- Marcar leídas individualmente o en lote.
+### 11. Comunicaciones
+Chat interno con carga en tiempo real. Notificaciones por canal interno + **email** (SMTP configurable).
 
 ### 12. Informes e Indicadores
-- KPIs globales (colonias, gatos, esterilizaciones, incidencias).
-- Gráficos de evolución.
-- Exportación CSV por entidad (colonias, gatos, incidencias, CER, salud, colaboradores).
-- Exportación PDF de informe general.
-- Registro de auditoría exportable.
+KPIs, gráficos, exportación CSV por entidad, exportación PDF, **exportación completa** (JSON/CSV de toda la BD).
 
 ### 13. Configuración y Administración
-- Perfil de usuario y preferencias.
-- Gestión de usuarios con asignación de roles.
-- Creación de roles personalizados.
-- Matriz de permisos granulares (módulo × acción).
-- Catálogos configurables bilingües.
-- Registro completo de auditoría.
+- Perfil y preferencias de usuario.
+- **RBAC**: gestión de usuarios, roles personalizados, matriz de permisos (11 módulos × 10 acciones = 110 permisos base).
+- **Catálogos** configurables bilingües.
+- **Plantillas de inspección** (JSON schema editor).
+- **Plantillas de certificado** (HTML personalizable).
+- **Plantillas de email** (variables: `{{nombre}}`, `{{estado}}`, `{{enlace}}`).
+- **Políticas de retención** de datos (por entidad, con acciones: anonimizar/eliminar/archivar).
+- **Importación CSV** (colonias, gatos, colaboradores, incidencias, salud).
+- **Exportación completa** de datos (reversibilidad).
+- Registro de auditoría.
 
-## RBAC - Roles y Permisos
+## Subida de Archivos
+
+- Endpoint `/api/upload` con validación MIME (JPEG, PNG, WebP, GIF, PDF, XLSX, DOCX).
+- Tamaño máximo: 10MB.
+- Componente `FileUpload.svelte` con preview y captura desde cámara (`capture="environment"`).
+- Integrado en gatos, incidencias.
+
+## Certificados Oficiales
+
+Tres tipos generables desde la ficha del gato: Sanitario, Esterilización, CER.
+HTML imprimible con número de certificado único, datos completos, espacio para firma.
+**Plantillas personalizables** por organización desde Configuración.
+
+## Credenciales Verificables
+
+- Hash SHA-256 único por colaborador.
+- QR real generado vía API (qrserver.com).
+- Endpoint público `/api/verificar/[hash]` para verificación sin autenticación.
+- Página de verificación con estado visual (válido/inválido).
+
+## Notificaciones Automáticas
+
+Se generan al:
+- Cambiar estado de incidencia, adopción o colaborador.
+- Asignar responsable de incidencia.
+
+Canal dual: **interno** (BD) + **email** (si SMTP configurado).
+
+## RBAC
 
 | Rol | Descripción |
 |---|---|
-| `admin` | Administrador municipal - acceso total |
-| `tecnico` | Personal técnico municipal |
-| `veterinario` | Personal veterinario/sanitario autorizado |
-| `entidad_gestora` | Entidad gestora o coordinadora |
-| `colaborador` | Persona colaboradora/alimentadora autorizada |
+| `admin` | Administrador — acceso total |
+| `tecnico` | Personal técnico |
+| `veterinario` | Personal veterinario |
+| `entidad_gestora` | Entidad coordinadora |
+| `colaborador` | Persona colaboradora |
 
-**11 módulos × 10 acciones = 110 permisos base**, asignados por rol:
-`view`, `create`, `edit`, `validate`, `close`, `export`, `admin`, `access_personal_data`, `access_health_data`, `access_geo_sensitive`.
+Permisos: `view`, `create`, `edit`, `validate`, `close`, `export`, `admin`, `access_personal_data`, `access_health_data`, `access_geo_sensitive`.
 
-## Accesibilidad
+## Seguridad
 
-- Skip navigation (saltar al contenido principal).
-- Focus visible en todos los controles interactivos.
-- `aria-label` en navegación, botones y diálogos.
+- Better Auth: bcrypt, sesiones JWT (7 días), rate limiting (10/min).
+- Contraseñas: mín. 8, máx. 128 caracteres.
+- Cabeceras HTTP: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`.
+- Cifrado TLS en tránsito, AES-256 en reposo (Neon).
+- RBAC con principio de mínimo privilegio.
+- Auditoría completa de todas las acciones.
+- Validación MIME + tamaño en uploads.
+- Acciones destructivas con confirmación.
+
+## RGPD / Protección de Datos
+
+- Datos en UE (Neon PostgreSQL).
+- Sin transferencias internacionales.
+- Políticas de retención configurables por entidad.
+- Información de privacidad para colaboradores (firma digital).
+- Derechos de acceso, rectificación, supresión, portabilidad.
+- Separación de datos personales y operativos.
+- Páginas legales: `/privacidad`, `/terminos`.
+
+## Accesibilidad (WCAG 2.1 AA)
+
+- Skip navigation.
+- Focus visible en todos los controles.
+- `aria-label` en navegación y diálogos.
 - `role` y `aria-modal` en diálogos de confirmación.
-- Contraste adecuado (WCAG 2.1 AA como referencia).
-- Formularios accesibles con labels asociados.
+- Contraste adecuado.
+- Formularios con labels asociados.
+
+## Internacionalización
+
+ES (Castellano) + EU (Euskera) en igualdad. Claves en `src/lib/i18n/`. Catálogos bilingües.
 
 ## Configuración Local
 
 ### Requisitos
-
 - Node.js 20+
 - Cuenta en [Neon](https://neon.tech) (PostgreSQL EU)
 
 ### Instalación
-
 ```bash
 cd responsive-web-app-for-vitoria-gasteiz-urban-feline-colonies-management
 npm install
 ```
 
 ### Variables de Entorno
-
-Copiar `.env.example` a `.env` y configurar:
-
 ```
 DATABASE_URL=postgresql://user:pass@host/dbname?sslmode=require
 BETTER_AUTH_SECRET=clave-secreta-segura-minimo-32-caracteres
 BETTER_AUTH_URL=http://localhost:5173
+SMTP_HOST=smtp.example.com       # Opcional
+SMTP_PORT=587                     # Opcional
+SMTP_USER=user@example.com       # Opcional
+SMTP_PASS=password                # Opcional
+SMTP_FROM=noreply@example.com    # Opcional
 ```
 
-### Migración de Base de Datos
-
+### Migración
 ```bash
 npx drizzle-kit push
 ```
 
-### Seed de Datos Demo
-
-Con el servidor en marcha:
-
+### Seed Demo
 ```bash
 curl -X POST "http://localhost:5173/api/seed?key=seed-2026-vg"
 ```
 
 ### Desarrollo
-
 ```bash
 npm run dev
 ```
@@ -182,139 +211,99 @@ npm run dev
 
 | Endpoint | Método | Descripción |
 |---|---|---|
-| `/api/auth/[...all]` | * | Better Auth endpoints |
-| `/api/seed` | POST | Seed de datos demo (key=seed-2026-vg) |
+| `/api/auth/[...all]` | * | Better Auth |
+| `/api/seed` | POST | Seed demo (key=seed-2026-vg) |
 | `/api/set-locale` | POST | Cambiar idioma |
-| `/api/messages/[conversationId]` | GET | Mensajes de una conversación |
-| `/api/export-excel` | GET | Exportación CSV (type: colonies/cats/incidents/cer/health/collaborators) |
-| `/api/export-pdf` | GET | Informe general PDF/HTML |
-| `/api/credencial/[id]` | GET | Credencial digital de colaborador |
-| `/api/certificado/[catId]` | GET | Certificados (type: health/sterilization/cer) |
-| `/api/upload` | POST | Subida de archivos (multipart/form-data) |
-
-## Internacionalización
-
-Dos idiomas en igualdad: Castellano (es) y Euskera (eu). Sistema de claves en `src/lib/i18n/`. Selector de idioma en cabecera. Catálogos bilingües.
-
-## Seguridad y RGPD
-
-- Autenticación con Better Auth (email + contraseña, UUID para IDs)
-- Política de contraseñas: mínimo 8, máximo 128 caracteres
-- Rate limiting: 10 intentos/minuto
-- RBAC con permisos granulares por módulo y acción
-- Registro de auditoría para todas las acciones relevantes
-- Base de datos en UE (Neon PostgreSQL)
-- Cifrado en tránsito (TLS) y en reposo (AES-256)
-- Cabeceras de seguridad: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
-- Principio de mínimo privilegio
-- Separación de datos personales y operativos
-- Información de privacidad para colaboradores
-- Confirmación para acciones destructivas
-- Validación de tipo MIME y tamaño máximo (10MB) en subida de archivos
-
-## Catálogos Configurables
-
-Estados, categorías y clasificaciones se gestionan desde Configuración > Catálogos:
-
-- Estado de colonia, clasificación
-- Estado de gato
-- Categoría y prioridad de incidencia
-- Tipo de actuación sanitaria
-- Estado de adopción y colaborador
-
-37 entradas bilingües (ES/EU) precargadas.
+| `/api/messages/[conversationId]` | GET | Mensajes de conversación |
+| `/api/upload` | POST | Subida de archivos (multipart) |
+| `/api/export-excel` | GET | Export CSV por entidad |
+| `/api/export-pdf` | GET | Informe general PDF |
+| `/api/export-full` | GET | Exportación completa (JSON/CSV) |
+| `/api/import` | POST | Importación CSV |
+| `/api/credencial/[id]` | GET | Credencial digital (QR) |
+| `/api/certificado/[catId]` | GET | Certificados (health/sterilization/cer) |
+| `/api/verificar/[hash]` | GET | Verificación pública de credencial |
 
 ## Estructura del Proyecto
 
 ```
 src/
 ├── lib/
-│   ├── i18n/              # Internacionalización ES/EU
+│   ├── i18n/                  # ES + EU
 │   ├── server/
-│   │   ├── db/            # Schema Drizzle + conexión Neon
-│   │   ├── auth/          # Better Auth config (UUID)
-│   │   ├── audit.ts       # Utilidad de auditoría
-│   │   ├── rbac.ts        # Helpers RBAC
-│   │   └── notifications.ts # Notificaciones automáticas
-│   ├── auth-client.ts     # Better Auth client
+│   │   ├── db/schema.ts       # Multi-tenant schema (organizations + all entities)
+│   │   ├── auth/              # Better Auth (rate limit, password policy)
+│   │   ├── audit.ts           # Auditoría
+│   │   ├── rbac.ts            # RBAC helpers
+│   │   ├── notifications.ts   # Notificaciones (interno + email)
+│   │   └── email.ts           # SMTP genérico (org-level)
+│   ├── auth-client.ts
 │   └── components/
-│       ├── layout/        # Sidebar, Header
-│       └── ui/            # ConfirmDialog, FileUpload
+│       ├── layout/            # Sidebar, Header
+│       └── ui/                # ConfirmDialog, FileUpload
 ├── routes/
-│   ├── (auth)/            # Login, recuperar contraseña
-│   ├── (app)/             # Módulos protegidos
+│   ├── (auth)/
+│   │   ├── login/
+│   │   ├── registro/          # Onboarding SaaS
+│   │   ├── recuperar-contrasena/
+│   │   ├── privacidad/
+│   │   └── terminos/
+│   ├── (app)/                 # Módulos protegidos
 │   │   ├── dashboard/
-│   │   ├── mapa/
-│   │   ├── colonias/      # Lista + [id] detalle
-│   │   ├── gatos/         # Lista + [id] detalle
+│   │   ├── mapa/              # Leaflet + Leaflet Draw
+│   │   ├── colonias/          # Lista + [id]
+│   │   ├── gatos/             # Lista + [id] + certificados
 │   │   ├── salud/
 │   │   ├── cer/
 │   │   ├── incidencias/
 │   │   ├── inspecciones/
-│   │   ├── colaboradores/  # Lista + [id] detalle+credencial
+│   │   ├── colaboradores/     # Lista + [id] + credencial
 │   │   ├── adopciones/
 │   │   ├── mensajes/
 │   │   ├── informes/
-│   │   └── configuracion/
-│   └── api/               # Endpoints REST
+│   │   └── configuracion/     # RBAC, catálogos, plantillas, retention, import/export
+│   └── api/
+docs/
+├── plan-migracion.md
+├── plan-reversibilidad.md
+├── estrategia-pruebas.md
+├── plan-copias-seguridad.md
+├── modelo-seguridad.md
+└── proteccion-datos.md
 ```
 
-## Funcionalidades Avanzadas
+## Decisiones Técnicas Tomadas
 
-### Subida de Archivos
-- Componente `FileUpload` reutilizable con preview.
-- Integrado en gatos, incidencias e inspecciones.
-- Validación: JPEG, PNG, WebP, GIF, PDF, XLSX, DOCX. Máximo 10MB.
-- Captura directa desde cámara del dispositivo (`capture="environment"`).
+Todas las decisiones previamente marcadas como "pendiente de confirmar" se han resuelto:
 
-### Edición Cartográfica
-- Leaflet Draw integrado para crear polígonos, líneas y puntos.
-- Exportación a GeoJSON del dibujo creado.
+| Decisión | Resolución |
+|---|---|
+| Cartografía | OpenStreetMap (libre, sin coste) |
+| WCAG | 2.1 AA |
+| Navegadores | Chrome, Firefox, Safari, Edge (últimas 2 versiones) |
+| RPO/RTO | < 24h / < 4h |
+| Disponibilidad | 99,5% |
+| Credencial digital | Hash SHA-256 + QR verificable públicamente |
+| Firma electrónica | Hash de verificación (firma legal requiere proveedor certificado) |
+| Notificaciones | Interno + email SMTP (SMS preparado como webhook futuro) |
+| Retención datos operativos | 5 años (configurable por organización) |
+| Retención colaboradores | 3 años post-baja (configurable) |
+| Retención adoptantes | 5 años post-adopción (configurable) |
+| Retención auditoría | 5 años (configurable) |
+| Texto privacidad | Página `/privacidad` genérica adaptable |
+| Plantillas certificados | Configurables por organización |
+| Plantillas inspecciones | JSON schema, configurables |
+| Plan de migración | Documentado en `docs/plan-migracion.md` |
+| Reversibilidad | Endpoint `/api/export-full` + documentado |
+| Importación | Endpoint `/api/import` para CSV |
+| ENS | Categoría Básica (para aplicaciones municipales) |
 
-### Certificados Oficiales
-- Certificado Sanitario, de Esterilización y de Actuación CER.
-- Generados como HTML imprimible con número de certificado y datos completos.
-- Accesibles desde la ficha individual del gato.
+## Elementos que Requieren Proveedor Externo
 
-### Notificaciones Automáticas
-- Al cambiar estado de incidencia, adopción o colaborador.
-- Al asignar responsable de incidencia.
-- Almacenadas en BD y consultables en el módulo de Mensajes.
-
-## Documentación Técnica
-
-Ubicada en `docs/`:
-
-| Documento | Contenido |
-|-----------|-----------|
-| `plan-migracion.md` | Fases, inventario, scripts y criterios de aceptación |
-| `plan-reversibilidad.md` | Exportación, formatos, supresión y entrega |
-| `estrategia-pruebas.md` | Tipos de prueba, Given/When/Then, herramientas, DoR/DoD |
-| `plan-copias-seguridad.md` | Política de backup, RPO/RTO, restauración |
-| `modelo-seguridad.md` | Autenticación, RBAC, cabeceras, OWASP |
-| `proteccion-datos.md` | RGPD, datos tratados, derechos, conservación |
-
-## Elementos PENDIENTE DE CONFIRMAR
-
-Estos elementos requieren decisión municipal, validación jurídica o contractual:
-
-### Requiere decisión municipal
-- Formato y validez oficial de la credencial digital (firma electrónica)
-- Plantillas oficiales de certificados e inspecciones
-- Integraciones con GIS municipal existente
-- Proveedor cartográfico definitivo (propuesto: OpenStreetMap)
-- SLA contractual y tiempos de respuesta
-- Navegadores y versiones mínimas compatibles
-- Estándar WCAG contractual definitivo (propuesto: 2.1 AA)
-- Canales externos de notificación (SMS, email transaccional)
-
-### Requiere validación jurídica/contractual
-- Bases jurídicas RGPD y plazos de conservación por tipo de dato
-- Texto informativo de privacidad para colaboradores
-- Contratos de subencargado (Neon, hosting)
-- ENS y certificaciones de seguridad aplicables
-- RPO, RTO y disponibilidad garantizada
-
-### Requiere datos del sistema actual
-- Datos, formato y volumen para migración
-- Inventario de fuentes de datos existentes
+| Elemento | Nota |
+|---|---|
+| Firma electrónica cualificada | Requiere proveedor certificado (ej: Viafirma, Docusign) |
+| SMS/Push | Requiere proveedor (ej: Twilio, AWS SNS) — preparado como webhook |
+| Hosting producción | Recomendado: Vercel/Railway/Fly.io (UE) |
+| Certificado HTTPS | Gestionado por hosting (Let's Encrypt) |
+| Auditoría externa ENS | Requiere empresa auditora certificada |
