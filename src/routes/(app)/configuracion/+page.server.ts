@@ -1,7 +1,7 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { users, userRoles, roles, permissions, rolePermissions, catalogs, auditLogs, inspectionTemplates, certificateTemplates, emailTemplates, dataRetentionPolicies } from '$lib/server/db/schema.js';
-import { eq, desc, asc } from 'drizzle-orm';
+import { eq, and, desc, asc } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { hasPermission } from '$lib/server/rbac.js';
 import { logAudit } from '$lib/server/audit.js';
@@ -150,10 +150,15 @@ export const actions: Actions = {
 		const action = fd.get('action') as string;
 
 		if (action === 'add') {
-			await db.insert(rolePermissions).values({ roleId, permissionId });
+			const existing = await db.select().from(rolePermissions)
+				.where(and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.permissionId, permissionId)))
+				.limit(1);
+			if (existing.length === 0) {
+				await db.insert(rolePermissions).values({ roleId, permissionId });
+			}
 		} else {
 			await db.delete(rolePermissions)
-				.where(eq(rolePermissions.roleId, roleId));
+				.where(and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.permissionId, permissionId)));
 		}
 
 		return { permUpdated: true };

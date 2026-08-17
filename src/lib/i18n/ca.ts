@@ -384,6 +384,7 @@ const ca: Record<string, string> = {
 	'health.type.deworming': 'Desparasitació',
 	'health.type.microchip': 'Implantació Microxip',
 	'health.type.checkup': 'Revisió General',
+	'health.type.treatment': 'Tractament',
 	'health.type.surgery': 'Cirurgia',
 	'health.type.other': 'Altre',
 	'health.vet_name': 'Nom del Veterinari',

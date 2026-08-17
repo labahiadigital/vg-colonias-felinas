@@ -376,6 +376,7 @@ const es: Record<string, string> = {
 	'health.type.deworming': 'Desparasitación',
 	'health.type.microchip': 'Implantación Microchip',
 	'health.type.checkup': 'Revisión General',
+	'health.type.treatment': 'Tratamiento',
 	'health.type.surgery': 'Cirugía',
 	'health.type.other': 'Otro',
 	'health.vet_name': 'Nombre del Veterinario',

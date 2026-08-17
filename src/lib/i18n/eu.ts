@@ -376,6 +376,7 @@ const eu: Record<string, string> = {
 	'health.type.deworming': 'Desparasitazioa',
 	'health.type.microchip': 'Mikrotxip Ezarpena',
 	'health.type.checkup': 'Azterketa Orokorra',
+	'health.type.treatment': 'Tratamendua',
 	'health.type.surgery': 'Kirurgia',
 	'health.type.other': 'Beste bat',
 	'health.vet_name': 'Albaitariaren Izena',
