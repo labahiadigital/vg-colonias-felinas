@@ -4,6 +4,7 @@ import { incidents, colonies, users, auditLogs } from '$lib/server/db/schema.js'
 import { eq, and, desc, ilike, sql } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { logAudit } from '$lib/server/audit.js';
+import { notify } from '$lib/server/notifications.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const statusFilter = url.searchParams.get('status') ?? '';
@@ -111,6 +112,10 @@ export const actions: Actions = {
 
 		await db.update(incidents).set({ status, updatedAt: new Date() }).where(eq(incidents.id, id));
 		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: id, action: 'change_status', details: { newStatus: status } });
+
+		const statusLabels: Record<string, string> = { open: 'Abierta', in_progress: 'En progreso', resolved: 'Resuelta', closed: 'Cerrada' };
+		await notify({ type: 'incident_status', title: 'Incidencia actualizada', message: `La incidencia ha cambiado a estado: ${statusLabels[status] || status}`, payload: { incidentId: id, status } });
+
 		return { updated: true };
 	},
 
@@ -121,6 +126,10 @@ export const actions: Actions = {
 		const assignedTo = fd.get('assignedTo') as string;
 
 		await db.update(incidents).set({ assignedTo: assignedTo || null, updatedAt: new Date() }).where(eq(incidents.id, id));
+
+		if (assignedTo) {
+			await notify({ userId: assignedTo, type: 'incident_assigned', title: 'Incidencia asignada', message: 'Se te ha asignado una nueva incidencia.', payload: { incidentId: id } });
+		}
 		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: id, action: 'assign', details: { assignedTo } });
 		return { assigned: true };
 	},

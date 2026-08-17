@@ -3,6 +3,7 @@ import { db } from '$lib/server/db/index.js';
 import { adoptions, cats, colonies, auditLogs } from '$lib/server/db/schema.js';
 import { desc, eq } from 'drizzle-orm';
 import { redirect, fail } from '@sveltejs/kit';
+import { notify } from '$lib/server/notifications.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/login');
@@ -108,6 +109,9 @@ export const actions: Actions = {
 			action: 'update_status',
 			details: { status }
 		});
+
+		const statusLabels: Record<string, string> = { pending: 'Pendiente', approved: 'Aprobada', completed: 'Completada', rejected: 'Rechazada' };
+		await notify({ type: 'adoption_status', title: 'Adopción actualizada', message: `Una adopción ha cambiado a estado: ${statusLabels[status] || status}`, payload: { adoptionId: id, status } });
 
 		return { success: true };
 	}

@@ -6,10 +6,13 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
 
+	import FileUpload from '$lib/components/ui/FileUpload.svelte';
+
 	let showNewForm = $state(false);
 	let expandedIncident = $state<string | null>(null);
 	let useGeo = $state(false);
 	let geoLat = $state('');
+	let incidentPhotos = $state<string[]>([]);
 	let geoLng = $state('');
 
 	function getLocation() {
@@ -117,6 +120,15 @@
 					<div class="md:col-span-2">
 						<label for="description" class="block text-sm font-semibold mb-1">Descripción *</label>
 						<textarea name="description" id="description" rows="3" required class="w-full px-3 py-2 border rounded-md text-sm"></textarea>
+					</div>
+					<div class="md:col-span-2">
+						<FileUpload
+							ownerEntity="incidents"
+							accept="image/*"
+							label="Adjuntar fotografía"
+							onuploaded={(r) => { incidentPhotos = [...incidentPhotos, r.path]; }}
+						/>
+						<input type="hidden" name="photos" value={JSON.stringify(incidentPhotos)} />
 					</div>
 				</div>
 				<div class="flex gap-3 mt-4">

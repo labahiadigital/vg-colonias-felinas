@@ -55,6 +55,7 @@ export const actions: Actions = {
 		const sex = fd.get('sex') as string;
 		const microchip = fd.get('microchip') as string;
 		const estimatedAge = fd.get('estimatedAge') as string;
+		const photo = fd.get('photo') as string;
 
 		const [newCat] = await db.insert(cats).values({
 			name: name || null,
@@ -62,6 +63,7 @@ export const actions: Actions = {
 			sex: sex || null,
 			microchip: microchip || null,
 			estimatedAge: estimatedAge || null,
+			photo: photo || null,
 			status: 'in_colony',
 			sterilized: false
 		}).returning({ id: cats.id });

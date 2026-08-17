@@ -55,12 +55,19 @@
 					</div>
 				</div>
 
-				<div class="mt-5 flex gap-2">
-					<button onclick={() => editing = !editing} class="flex-1 px-3 py-2 bg-primary text-white text-sm rounded-md font-semibold hover:bg-primary-dark">
-						{editing ? 'Cancelar' : '✏️ Editar'}
-					</button>
-					<button onclick={() => showDeleteConfirm = true} class="px-3 py-2 bg-red-600 text-white text-sm rounded-md font-semibold hover:bg-red-700">🗑️</button>
-					<form bind:this={deleteFormEl} method="POST" action="?/delete" use:enhance class="hidden"></form>
+				<div class="mt-5 space-y-2">
+					<div class="flex gap-2">
+						<button onclick={() => editing = !editing} class="flex-1 px-3 py-2 bg-primary text-white text-sm rounded-md font-semibold hover:bg-primary-dark">
+							{editing ? 'Cancelar' : '✏️ Editar'}
+						</button>
+						<button onclick={() => showDeleteConfirm = true} class="px-3 py-2 bg-red-600 text-white text-sm rounded-md font-semibold hover:bg-red-700">🗑️</button>
+						<form bind:this={deleteFormEl} method="POST" action="?/delete" use:enhance class="hidden"></form>
+					</div>
+					<div class="flex flex-col gap-1 text-xs">
+						<a href="/api/certificado/{cat.id}?type=health" target="_blank" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-center hover:bg-gray-200 font-semibold">📄 Certificado Sanitario</a>
+						<a href="/api/certificado/{cat.id}?type=sterilization" target="_blank" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-center hover:bg-gray-200 font-semibold">📄 Cert. Esterilización</a>
+						<a href="/api/certificado/{cat.id}?type=cer" target="_blank" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-center hover:bg-gray-200 font-semibold">📄 Cert. CER</a>
+					</div>
 				</div>
 			</div>
 		</div>

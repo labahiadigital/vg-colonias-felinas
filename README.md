@@ -189,6 +189,8 @@ npm run dev
 | `/api/export-excel` | GET | Exportación CSV (type: colonies/cats/incidents/cer/health/collaborators) |
 | `/api/export-pdf` | GET | Informe general PDF/HTML |
 | `/api/credencial/[id]` | GET | Credencial digital de colaborador |
+| `/api/certificado/[catId]` | GET | Certificados (type: health/sterilization/cer) |
+| `/api/upload` | POST | Subida de archivos (multipart/form-data) |
 
 ## Internacionalización
 
@@ -197,14 +199,18 @@ Dos idiomas en igualdad: Castellano (es) y Euskera (eu). Sistema de claves en `s
 ## Seguridad y RGPD
 
 - Autenticación con Better Auth (email + contraseña, UUID para IDs)
+- Política de contraseñas: mínimo 8, máximo 128 caracteres
+- Rate limiting: 10 intentos/minuto
 - RBAC con permisos granulares por módulo y acción
 - Registro de auditoría para todas las acciones relevantes
 - Base de datos en UE (Neon PostgreSQL)
-- Cifrado en tránsito (TLS)
+- Cifrado en tránsito (TLS) y en reposo (AES-256)
+- Cabeceras de seguridad: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
 - Principio de mínimo privilegio
 - Separación de datos personales y operativos
 - Información de privacidad para colaboradores
 - Confirmación para acciones destructivas
+- Validación de tipo MIME y tamaño máximo (10MB) en subida de archivos
 
 ## Catálogos Configurables
 
@@ -228,11 +234,12 @@ src/
 │   │   ├── db/            # Schema Drizzle + conexión Neon
 │   │   ├── auth/          # Better Auth config (UUID)
 │   │   ├── audit.ts       # Utilidad de auditoría
-│   │   └── rbac.ts        # Helpers RBAC
+│   │   ├── rbac.ts        # Helpers RBAC
+│   │   └── notifications.ts # Notificaciones automáticas
 │   ├── auth-client.ts     # Better Auth client
 │   └── components/
 │       ├── layout/        # Sidebar, Header
-│       └── ui/            # ConfirmDialog
+│       └── ui/            # ConfirmDialog, FileUpload
 ├── routes/
 │   ├── (auth)/            # Login, recuperar contraseña
 │   ├── (app)/             # Módulos protegidos
@@ -252,19 +259,62 @@ src/
 │   └── api/               # Endpoints REST
 ```
 
-## Elementos [PENDIENTE DE CONFIRMAR]
+## Funcionalidades Avanzadas
 
-- Formato, firma y validez definitiva de la credencial digital
+### Subida de Archivos
+- Componente `FileUpload` reutilizable con preview.
+- Integrado en gatos, incidencias e inspecciones.
+- Validación: JPEG, PNG, WebP, GIF, PDF, XLSX, DOCX. Máximo 10MB.
+- Captura directa desde cámara del dispositivo (`capture="environment"`).
+
+### Edición Cartográfica
+- Leaflet Draw integrado para crear polígonos, líneas y puntos.
+- Exportación a GeoJSON del dibujo creado.
+
+### Certificados Oficiales
+- Certificado Sanitario, de Esterilización y de Actuación CER.
+- Generados como HTML imprimible con número de certificado y datos completos.
+- Accesibles desde la ficha individual del gato.
+
+### Notificaciones Automáticas
+- Al cambiar estado de incidencia, adopción o colaborador.
+- Al asignar responsable de incidencia.
+- Almacenadas en BD y consultables en el módulo de Mensajes.
+
+## Documentación Técnica
+
+Ubicada en `docs/`:
+
+| Documento | Contenido |
+|-----------|-----------|
+| `plan-migracion.md` | Fases, inventario, scripts y criterios de aceptación |
+| `plan-reversibilidad.md` | Exportación, formatos, supresión y entrega |
+| `estrategia-pruebas.md` | Tipos de prueba, Given/When/Then, herramientas, DoR/DoD |
+| `plan-copias-seguridad.md` | Política de backup, RPO/RTO, restauración |
+| `modelo-seguridad.md` | Autenticación, RBAC, cabeceras, OWASP |
+| `proteccion-datos.md` | RGPD, datos tratados, derechos, conservación |
+
+## Elementos PENDIENTE DE CONFIRMAR
+
+Estos elementos requieren decisión municipal, validación jurídica o contractual:
+
+### Requiere decisión municipal
+- Formato y validez oficial de la credencial digital (firma electrónica)
 - Plantillas oficiales de certificados e inspecciones
-- Integraciones GIS municipales
+- Integraciones con GIS municipal existente
 - Proveedor cartográfico definitivo (propuesto: OpenStreetMap)
-- Firma electrónica de documentos
-- Canales externos de notificación (SMS, email transaccional, push)
 - SLA contractual y tiempos de respuesta
+- Navegadores y versiones mínimas compatibles
+- Estándar WCAG contractual definitivo (propuesto: 2.1 AA)
+- Canales externos de notificación (SMS, email transaccional)
+
+### Requiere validación jurídica/contractual
+- Bases jurídicas RGPD y plazos de conservación por tipo de dato
+- Texto informativo de privacidad para colaboradores
+- Contratos de subencargado (Neon, hosting)
+- ENS y certificaciones de seguridad aplicables
 - RPO, RTO y disponibilidad garantizada
-- ENS, certificaciones de seguridad
-- Datos, formato y volumen de migración del sistema actual
-- Formato de reversibilidad y entrega de datos
-- Navegadores y versiones compatibles
-- Estándar WCAG contractual definitivo
-- Bases jurídicas y plazos de conservación (requiere validación jurídica)
+
+### Requiere datos del sistema actual
+- Datos, formato y volumen para migración
+- Inventario de fuentes de datos existentes

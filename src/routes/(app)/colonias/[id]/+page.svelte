@@ -38,6 +38,7 @@
 	onMount(async () => {
 		if (colony.latitude && colony.longitude) {
 			const L = await import('leaflet');
+			if (!mapEl) return;
 			const map = L.map(mapEl).setView([colony.latitude, colony.longitude], 16);
 			L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 				attribution: '&copy; OpenStreetMap'

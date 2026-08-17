@@ -109,7 +109,6 @@
 				</thead>
 				<tbody class="divide-y">
 					{#each data.adoptions as adoption}
-						{@const badge = statusBadge(adoption.status)}
 						<tr class="hover:bg-gray-50">
 							<td class="px-4 py-3 font-medium">
 								<a href="/gatos/{adoption.catId}" class="text-primary hover:underline">{adoption.catName || 'Sin nombre'}</a>
@@ -117,7 +116,7 @@
 							<td class="px-4 py-3 text-gray-600">{adoption.colonyName || '-'}</td>
 							<td class="px-4 py-3">{getAdopterField(adoption.adopterInfo, 'name')}</td>
 							<td class="px-4 py-3 text-gray-600">{getAdopterField(adoption.adopterInfo, 'document')}</td>
-							<td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-bold {badge.bg}">{badge.label}</span></td>
+							<td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-bold {statusBadge(adoption.status).bg}">{statusBadge(adoption.status).label}</span></td>
 							<td class="px-4 py-3 text-gray-600">{adoption.adoptedAt ? new Date(adoption.adoptedAt).toLocaleDateString('es-ES') : adoption.createdAt ? new Date(adoption.createdAt).toLocaleDateString('es-ES') : '-'}</td>
 							<td class="px-4 py-3">
 								{#if adoption.status === 'pending'}

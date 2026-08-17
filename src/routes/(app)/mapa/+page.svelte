@@ -162,12 +162,41 @@
 		fpGroup.addTo(map);
 		incGroup.addTo(map);
 
+		// Leaflet Draw - edicion de poligonos, lineas y puntos
+		try {
+			await import('leaflet-draw');
+			const drawnItems = new L.FeatureGroup();
+			map.addLayer(drawnItems);
+
+			const drawControl = new (L as any).Control.Draw({
+				position: 'topright',
+				draw: {
+					polygon: { shapeOptions: { color: '#005a4d', weight: 2, fillOpacity: 0.15 } },
+					polyline: { shapeOptions: { color: '#005a4d', weight: 3 } },
+					marker: true,
+					circle: { shapeOptions: { color: '#f59e0b', weight: 2, fillOpacity: 0.1 } },
+					rectangle: false,
+					circlemarker: false
+				},
+				edit: { featureGroup: drawnItems }
+			});
+			map.addControl(drawControl);
+
+			map.on((L as any).Draw.Event.CREATED, (e: any) => {
+				const layer = e.layer;
+				drawnItems.addLayer(layer);
+				const geojson = layer.toGeoJSON();
+				console.log('Elemento creado (GeoJSON):', JSON.stringify(geojson));
+			});
+		} catch (_) { /* leaflet-draw no disponible */ }
+
 		setTimeout(() => map.invalidateSize(), 100);
 	});
 </script>
 
 <svelte:head>
 	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+	<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 </svelte:head>
 
 <div class="flex flex-col lg:flex-row h-[calc(100vh-8rem)] -m-4 lg:-m-6">

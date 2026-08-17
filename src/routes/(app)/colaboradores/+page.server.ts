@@ -3,6 +3,7 @@ import { db } from '$lib/server/db/index.js';
 import { collaborators, colonies } from '$lib/server/db/schema.js';
 import { eq, ilike, and } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
+import { notify } from '$lib/server/notifications.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const search = url.searchParams.get('q') ?? '';
@@ -69,6 +70,13 @@ export const actions: Actions = {
 		}
 
 		await db.update(collaborators).set(updates).where(eq(collaborators.id, id));
+
+		const [col] = await db.select().from(collaborators).where(eq(collaborators.id, id));
+		if (col?.userId) {
+			const statusLabels: Record<string, string> = { active: 'Activo', rejected: 'Rechazado', suspended: 'Suspendido', pending: 'Pendiente' };
+			await notify({ userId: col.userId, type: 'collaborator_status', title: 'Estado de colaborador actualizado', message: `Tu estado como colaborador/a ha cambiado a: ${statusLabels[status] || status}`, payload: { collaboratorId: id, status } });
+		}
+
 		return { updated: true };
 	}
 };

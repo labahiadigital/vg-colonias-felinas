@@ -6,7 +6,10 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
 
+	import FileUpload from '$lib/components/ui/FileUpload.svelte';
+
 	let showNewForm = $state(false);
+	let catPhotoPath = $state('');
 </script>
 
 <div>
@@ -60,6 +63,15 @@
 					<div>
 						<label for="estimatedAge" class="block text-sm font-semibold mb-1">Edad estimada</label>
 						<input type="text" name="estimatedAge" id="estimatedAge" placeholder="Ej: 2 años" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+					</div>
+					<div>
+						<FileUpload
+							ownerEntity="cats"
+							accept="image/*"
+							label="Fotografía"
+							onuploaded={(r) => catPhotoPath = r.path}
+						/>
+						<input type="hidden" name="photo" value={catPhotoPath} />
 					</div>
 				</div>
 				<div class="flex gap-3 mt-4">

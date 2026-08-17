@@ -19,11 +19,17 @@ export const auth = betterAuth({
 	secret: env.BETTER_AUTH_SECRET!,
 	emailAndPassword: {
 		enabled: true,
-		requireEmailVerification: false
+		requireEmailVerification: false,
+		minPasswordLength: 8,
+		maxPasswordLength: 128
 	},
 	session: {
 		expiresIn: 60 * 60 * 24 * 7,
 		updateAge: 60 * 60 * 24
+	},
+	rateLimit: {
+		window: 60,
+		max: 10
 	},
 	advanced: {
 		database: {
