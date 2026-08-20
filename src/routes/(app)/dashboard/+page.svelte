@@ -369,6 +369,62 @@
 					</div>
 				</div>
 			{/if}
+
+			<!-- ODS Impact Panel -->
+			<div class="bg-surface rounded-xl border border-border">
+				<div class="px-5 py-4 border-b border-border flex items-center justify-between">
+					<h2 class="text-sm font-semibold text-text">{t(locale, 'dashboard.ods_title')}</h2>
+					<a href="/informes?tab=ods" class="text-xs text-primary hover:text-primary-hover font-medium transition-colors">{t(locale, 'dashboard.view_all')}</a>
+				</div>
+				<div class="p-4 space-y-3">
+					<div class="flex items-center gap-3">
+						<div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+							<span class="text-xs font-bold text-red-700">3</span>
+						</div>
+						<div class="flex-1 min-w-0">
+							<p class="text-xs font-medium text-text">{t(locale, 'dashboard.ods3')}</p>
+							<div class="flex items-center gap-2 mt-1">
+								<div class="flex-1 h-1.5 bg-surface-sunken rounded-full overflow-hidden">
+									<div class="h-full bg-red-500 rounded-full transition-all" style="width:{Math.min(stats.sterilizationRate, 100)}%"></div>
+								</div>
+								<span class="text-[10px] font-medium text-text-muted">{stats.sterilizationRate}%</span>
+							</div>
+						</div>
+					</div>
+					<div class="flex items-center gap-3">
+						<div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+							<span class="text-xs font-bold text-amber-700">11</span>
+						</div>
+						<div class="flex-1 min-w-0">
+							<p class="text-xs font-medium text-text">{t(locale, 'dashboard.ods11')}</p>
+							<div class="flex items-center gap-2 mt-1">
+								<div class="flex-1 h-1.5 bg-surface-sunken rounded-full overflow-hidden">
+									<div class="h-full bg-amber-500 rounded-full transition-all" style="width:{Math.min(stats.geolocatedPct, 100)}%"></div>
+								</div>
+								<span class="text-[10px] font-medium text-text-muted">{stats.geolocatedPct}%</span>
+							</div>
+						</div>
+					</div>
+					<div class="flex items-center gap-3">
+						<div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+							<span class="text-xs font-bold text-emerald-700">15</span>
+						</div>
+						<div class="flex-1 min-w-0">
+							<p class="text-xs font-medium text-text">{t(locale, 'dashboard.ods15')}</p>
+							<p class="text-[10px] text-text-muted mt-0.5">{stats.cerTotal} {t(locale, 'dashboard.ods15_detail')}</p>
+						</div>
+					</div>
+					<div class="flex items-center gap-3">
+						<div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+							<span class="text-xs font-bold text-blue-700">16</span>
+						</div>
+						<div class="flex-1 min-w-0">
+							<p class="text-xs font-medium text-text">{t(locale, 'dashboard.ods16')}</p>
+							<p class="text-[10px] text-text-muted mt-0.5">{stats.totalInspections} {t(locale, 'dashboard.ods16_detail')}</p>
+						</div>
+					</div>
+				</div>
+			</div>
 		</div>
 	</div>
 </div>

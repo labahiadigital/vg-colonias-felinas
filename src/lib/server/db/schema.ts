@@ -35,6 +35,8 @@ export const organizations = pgTable('organizations', {
 	smtpUser: text('smtp_user'),
 	smtpPass: text('smtp_pass'),
 	smtpFrom: text('smtp_from'),
+	currency: text('currency').notNull().default('EUR'),
+	currencyLocale: text('currency_locale').notNull().default('es-ES'),
 	plan: text('plan').notNull().default('standard'),
 	maxUsers: integer('max_users').default(50),
 	isActive: boolean('is_active').default(true),
@@ -61,6 +63,11 @@ export const users = pgTable('users', {
 	image: text('image'),
 	language: text('language').notNull().default('es'),
 	activeOrganizationId: uuid('active_organization_id'),
+	twoFactorSecret: text('two_factor_secret'),
+	twoFactorEnabled: boolean('two_factor_enabled').default(false),
+	twoFactorBackupCodes: jsonb('two_factor_backup_codes'),
+	passwordChangedAt: timestamp('password_changed_at').defaultNow(),
+	passwordExpiresAt: timestamp('password_expires_at'),
 	createdAt: timestamp('created_at').defaultNow(),
 	updatedAt: timestamp('updated_at').defaultNow()
 });
@@ -102,6 +109,33 @@ export const verifications = pgTable('verifications', {
 	expiresAt: timestamp('expires_at').notNull(),
 	createdAt: timestamp('created_at').defaultNow(),
 	updatedAt: timestamp('updated_at').defaultNow()
+});
+
+// ─── Login Attempts & Security ──────────────────────────────────
+
+export const loginAttempts = pgTable('login_attempts', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	email: text('email').notNull(),
+	ipAddress: text('ip_address'),
+	userAgent: text('user_agent'),
+	success: boolean('success').notNull().default(false),
+	failureReason: text('failure_reason'),
+	attemptedAt: timestamp('attempted_at').defaultNow()
+});
+
+export const securityIncidents = pgTable('security_incidents', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+	type: text('type').notNull(),
+	severity: text('severity').notNull().default('low'),
+	description: text('description').notNull(),
+	affectedUserId: uuid('affected_user_id').references(() => users.id),
+	ipAddress: text('ip_address'),
+	status: text('status').notNull().default('open'),
+	resolvedAt: timestamp('resolved_at'),
+	resolvedBy: uuid('resolved_by').references(() => users.id),
+	details: jsonb('details'),
+	createdAt: timestamp('created_at').defaultNow()
 });
 
 // ─── RBAC ───────────────────────────────────────────────────────
@@ -440,6 +474,11 @@ export const visits = pgTable('visits', {
 	catsObserved: integer('cats_observed'),
 	foodProvided: boolean('food_provided').default(false),
 	waterProvided: boolean('water_provided').default(false),
+	foodQuantityKg: doublePrecision('food_quantity_kg'),
+	foodType: text('food_type'),
+	waterQuantityL: doublePrecision('water_quantity_l'),
+	feedingCostEur: doublePrecision('feeding_cost_eur'),
+	specialNeeds: text('special_needs'),
 	incidentDetected: boolean('incident_detected').default(false),
 	visitedAt: timestamp('visited_at').defaultNow(),
 	createdAt: timestamp('created_at').defaultNow()
@@ -513,6 +552,122 @@ export const subsidyReports = pgTable('subsidy_reports', {
 	approvedBy: uuid('approved_by').references(() => users.id),
 	approvedAt: timestamp('approved_at'),
 	documentPath: text('document_path'),
+	createdAt: timestamp('created_at').defaultNow(),
+	updatedAt: timestamp('updated_at').defaultNow()
+});
+
+// ─── Citizen Reports (Public Sightings) ─────────────────────────
+
+export const citizenReports = pgTable('citizen_reports', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	category: text('category').notNull().default('other'),
+	description: text('description').notNull(),
+	latitude: doublePrecision('latitude'),
+	longitude: doublePrecision('longitude'),
+	email: text('email'),
+	photoUrl: text('photo_url'),
+	status: text('status').notNull().default('pending'),
+	linkedIncidentId: uuid('linked_incident_id').references(() => incidents.id),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
+// ─── Equipment (Trap Bank) ──────────────────────────────────────
+
+export const equipment = pgTable('equipment', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	type: text('type').notNull().default('trap'),
+	serialNumber: text('serial_number'),
+	status: text('status').notNull().default('available'),
+	loanedTo: uuid('loaned_to').references(() => users.id),
+	loanedAt: timestamp('loaned_at'),
+	dueDate: timestamp('due_date'),
+	notes: text('notes'),
+	createdAt: timestamp('created_at').defaultNow(),
+	updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const equipmentHistory = pgTable('equipment_history', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	equipmentId: uuid('equipment_id').references(() => equipment.id, { onDelete: 'cascade' }).notNull(),
+	action: text('action').notNull(),
+	userId: uuid('user_id').references(() => users.id),
+	notes: text('notes'),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
+// ─── Trapping Campaigns ─────────────────────────────────────────
+
+export const trappingCampaigns = pgTable('trapping_campaigns', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	colonyId: uuid('colony_id').references(() => colonies.id),
+	startDate: date('start_date').notNull(),
+	endDate: date('end_date'),
+	status: text('status').notNull().default('planned'),
+	notes: text('notes'),
+	createdBy: uuid('created_by').references(() => users.id),
+	createdAt: timestamp('created_at').defaultNow(),
+	updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const trappingEvents = pgTable('trapping_events', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	campaignId: uuid('campaign_id').references(() => trappingCampaigns.id, { onDelete: 'cascade' }).notNull(),
+	equipmentId: uuid('equipment_id').references(() => equipment.id),
+	catId: uuid('cat_id').references(() => cats.id),
+	eventType: text('event_type').notNull(),
+	latitude: doublePrecision('latitude'),
+	longitude: doublePrecision('longitude'),
+	notes: text('notes'),
+	performedBy: uuid('performed_by').references(() => users.id),
+	performedAt: timestamp('performed_at').defaultNow(),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
+// ─── Push Subscriptions ─────────────────────────────────────────
+
+export const pushSubscriptions = pgTable('push_subscriptions', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+	endpoint: text('endpoint').notNull(),
+	p256dh: text('p256dh').notNull(),
+	auth: text('auth').notNull(),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
+// ─── API Keys ───────────────────────────────────────────────────
+
+export const apiKeys = pgTable('api_keys', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	keyHash: text('key_hash').notNull(),
+	keyPrefix: text('key_prefix').notNull(),
+	scopes: jsonb('scopes'),
+	rateLimit: integer('rate_limit').default(1000),
+	lastUsedAt: timestamp('last_used_at'),
+	expiresAt: timestamp('expires_at'),
+	active: boolean('active').notNull().default(true),
+	createdBy: uuid('created_by').references(() => users.id),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
+// ─── Regulatory Templates ───────────────────────────────────────
+
+export const regulatoryTemplates = pgTable('regulatory_templates', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	country: text('country').notNull(),
+	region: text('region'),
+	type: text('type').notNull(),
+	name: text('name').notNull(),
+	description: text('description'),
+	templateHtml: text('template_html').notNull(),
+	requiredFields: jsonb('required_fields'),
+	locale: text('locale').notNull().default('es'),
+	isActive: boolean('is_active').default(true),
 	createdAt: timestamp('created_at').defaultNow(),
 	updatedAt: timestamp('updated_at').defaultNow()
 });

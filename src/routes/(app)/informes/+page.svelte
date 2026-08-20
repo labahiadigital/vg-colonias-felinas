@@ -5,7 +5,39 @@
 	let { data }: { data: PageData } = $props();
 	let locale = $derived(data.locale);
 	let kpis = $derived(data.kpis);
-	let activeTab = $state<'kpis' | 'compliance' | 'dgda'>('kpis');
+	let activeTab = $state<'kpis' | 'compliance' | 'dgda' | 'ods'>('kpis');
+	let dgdaYear = $state(new Date().getFullYear());
+	let regulatoryCountry = $state('ES');
+	let regulatoryOrgName = $state('');
+	let regulatoryMunicipio = $state('');
+
+	const regulatoryTemplateList = [
+		{ country: 'ES', type: 'memoria_anual', label: 'Memoria Anual CER — Ley 7/2023' },
+		{ country: 'ES', type: 'informe_pleno', label: 'Informe para Pleno Municipal' },
+		{ country: 'PT', type: 'relatorio_anual', label: 'Relatório Anual ICNF — Lei 27/2016' },
+		{ country: 'IT', type: 'relazione_annuale', label: 'Relazione Annuale ASL — Legge 281/1991' },
+		{ country: 'FR', type: 'rapport_annuel', label: 'Rapport Annuel Préfecture — Code Rural' }
+	];
+
+	const availableCountries = [
+		{ code: 'ES', flag: '🇪🇸', label: 'España' },
+		{ code: 'PT', flag: '🇵🇹', label: 'Portugal' },
+		{ code: 'IT', flag: '🇮🇹', label: 'Italia' },
+		{ code: 'FR', flag: '🇫🇷', label: 'France' }
+	];
+
+	const filteredTemplates = $derived(regulatoryTemplateList.filter(t => t.country === regulatoryCountry));
+
+	function openRegulatoryReport(type: string) {
+		const params = new URLSearchParams({
+			country: regulatoryCountry,
+			type,
+			year: String(dgdaYear),
+			org: regulatoryOrgName || 'Organización',
+			municipio: regulatoryMunicipio || 'Municipio'
+		});
+		window.open(`/api/regulatory-report?${params.toString()}`, '_blank');
+	}
 
 	function categoryLabel(c: string): string {
 		const key = `reports.cat_${c}` as const;
@@ -152,6 +184,9 @@
 		</button>
 		<button onclick={() => activeTab = 'dgda'} class="px-4 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'dgda' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'}">
 			{t(locale, 'reports.dgda')}
+		</button>
+		<button onclick={() => activeTab = 'ods'} class="px-4 py-2 rounded-md text-sm font-medium transition-colors {activeTab === 'ods' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'}">
+			ODS
 		</button>
 	</div>
 
@@ -617,8 +652,57 @@
 				</div>
 			</div>
 
-			<div class="mt-6 flex flex-wrap gap-2">
-				<a href="/api/export-pdf?type=subsidy_dgda" target="_blank" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors shadow-sm">
+			<div class="mt-6 border border-border rounded-lg overflow-hidden">
+				<div class="px-4 py-3 bg-surface-sunken border-b border-border">
+					<h4 class="text-sm font-semibold text-text">{t(locale, 'reports.regulatory_templates_title')}</h4>
+					<p class="text-xs text-text-muted mt-0.5">{t(locale, 'reports.regulatory_templates_subtitle')}</p>
+				</div>
+				<div class="p-4 space-y-4">
+					<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+						<div>
+							<label for="reg-country" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'reports.regulatory_country')}</label>
+							<select id="reg-country" bind:value={regulatoryCountry} class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+								{#each availableCountries as c}
+									<option value={c.code}>{c.flag} {c.label}</option>
+								{/each}
+							</select>
+						</div>
+						<div>
+							<label for="reg-org" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'reports.regulatory_org')}</label>
+							<input id="reg-org" type="text" bind:value={regulatoryOrgName} placeholder={t(locale, 'reports.regulatory_org_placeholder')} class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+						</div>
+						<div>
+							<label for="reg-municipio" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'reports.regulatory_municipio')}</label>
+							<input id="reg-municipio" type="text" bind:value={regulatoryMunicipio} placeholder={t(locale, 'reports.regulatory_municipio_placeholder')} class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+						</div>
+					</div>
+					<div class="space-y-2">
+						{#each filteredTemplates as tpl}
+							<div class="flex items-center justify-between px-4 py-3 bg-surface-sunken rounded-lg">
+								<div>
+									<p class="text-sm font-medium text-text">{tpl.label}</p>
+									<p class="text-xs text-text-muted">{tpl.country} · {tpl.type}</p>
+								</div>
+								<button onclick={() => openRegulatoryReport(tpl.type)} class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary-hover transition-colors">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+									{t(locale, 'reports.generate_report')}
+								</button>
+							</div>
+						{/each}
+					</div>
+				</div>
+			</div>
+
+			<div class="mt-4 flex flex-wrap items-center gap-3">
+				<div class="flex items-center gap-2">
+					<label for="dgda-year" class="text-xs font-medium text-text-muted uppercase tracking-wide">{t(locale, 'reports.year')}:</label>
+					<select id="dgda-year" bind:value={dgdaYear} class="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+						{#each Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i) as y}
+							<option value={y}>{y}</option>
+						{/each}
+					</select>
+				</div>
+				<a href="/api/subsidy-report?year={dgdaYear}" target="_blank" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors shadow-sm">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
 					{t(locale, 'reports.generate_dgda')}
 				</a>
@@ -630,6 +714,126 @@
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M9 12l2 2 4-4"/><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/></svg>
 					{t(locale, 'reports.compliance_report_pdf')}
 				</a>
+			</div>
+		</div>
+	{/if}
+
+	{#if activeTab === 'ods'}
+		<div class="space-y-5">
+			<div class="bg-surface rounded-xl border-2 border-primary/20 p-6">
+				<div class="flex items-start gap-4 mb-5">
+					<div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-6 h-6 text-primary"><circle cx="12" cy="12" r="10"/><path d="M12 2a15 15 0 014 10 15 15 0 01-4 10A15 15 0 018 12 15 15 0 0112 2z"/><path d="M2 12h20"/></svg>
+					</div>
+					<div>
+						<h3 class="text-lg font-bold text-text">Objetivos de Desarrollo Sostenible (ODS)</h3>
+						<p class="text-sm text-text-secondary mt-0.5">Impacto de la gestion de colonias felinas en los ODS de la Agenda 2030</p>
+					</div>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div class="bg-surface rounded-xl border border-border p-5">
+					<div class="flex items-center gap-3 mb-4">
+						<div class="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0">
+							<span class="text-lg font-bold text-success">3</span>
+						</div>
+						<div>
+							<h4 class="text-sm font-semibold text-text">ODS 3: Salud y Bienestar</h4>
+							<p class="text-xs text-text-muted">Control sanitario y zoonosis</p>
+						</div>
+					</div>
+					<div class="space-y-2">
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Registros sanitarios</span><span class="font-semibold text-text">{kpis.totalHealthRecords}</span></div>
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Tasa esterilizacion</span><span class="font-semibold text-text">{kpis.sterilizationRate}%</span></div>
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Proveedores veterinarios</span><span class="font-semibold text-text">{kpis.activeProviders}</span></div>
+						<div class="mt-3 h-2 bg-surface-sunken rounded-full overflow-hidden">
+							<div class="h-full bg-success rounded-full" style="width: {Math.min(100, kpis.totalHealthRecords > 0 ? 100 : 0)}%"></div>
+						</div>
+					</div>
+				</div>
+
+				<div class="bg-surface rounded-xl border border-border p-5">
+					<div class="flex items-center gap-3 mb-4">
+						<div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
+							<span class="text-lg font-bold text-warning">11</span>
+						</div>
+						<div>
+							<h4 class="text-sm font-semibold text-text">ODS 11: Ciudades Sostenibles</h4>
+							<p class="text-xs text-text-muted">Gestion de fauna urbana</p>
+						</div>
+					</div>
+					<div class="space-y-2">
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Colonias geolocalizadas</span><span class="font-semibold text-text">{kpis.geolocatedPct}%</span></div>
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Incidencias resueltas</span><span class="font-semibold text-text">{kpis.incidentResolutionRate}%</span></div>
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Inspecciones realizadas</span><span class="font-semibold text-text">{kpis.totalInspections}</span></div>
+						<div class="mt-3 h-2 bg-surface-sunken rounded-full overflow-hidden">
+							<div class="h-full bg-warning rounded-full" style="width: {kpis.geolocatedPct}%"></div>
+						</div>
+					</div>
+				</div>
+
+				<div class="bg-surface rounded-xl border border-border p-5">
+					<div class="flex items-center gap-3 mb-4">
+						<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+							<span class="text-lg font-bold text-primary">15</span>
+						</div>
+						<div>
+							<h4 class="text-sm font-semibold text-text">ODS 15: Vida de Ecosistemas Terrestres</h4>
+							<p class="text-xs text-text-muted">Biodiversidad y control poblacional</p>
+						</div>
+					</div>
+					<div class="space-y-2">
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Acciones CER</span><span class="font-semibold text-text">{kpis.totalCER}</span></div>
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Gatos esterilizados</span><span class="font-semibold text-text">{kpis.sterilizationRate}%</span></div>
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Adopciones</span><span class="font-semibold text-text">{kpis.totalAdoptions}</span></div>
+						<div class="mt-3 h-2 bg-surface-sunken rounded-full overflow-hidden">
+							<div class="h-full bg-primary rounded-full" style="width: {kpis.sterilizationRate}%"></div>
+						</div>
+					</div>
+				</div>
+
+				<div class="bg-surface rounded-xl border border-border p-5">
+					<div class="flex items-center gap-3 mb-4">
+						<div class="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center flex-shrink-0">
+							<span class="text-lg font-bold text-info">16</span>
+						</div>
+						<div>
+							<h4 class="text-sm font-semibold text-text">ODS 16: Instituciones Solidas</h4>
+							<p class="text-xs text-text-muted">Transparencia y trazabilidad</p>
+						</div>
+					</div>
+					<div class="space-y-2">
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Colaboradores acreditados</span><span class="font-semibold text-text">{kpis.activeCollaborators}</span></div>
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Horas voluntariado</span><span class="font-semibold text-text">{kpis.volunteerHours.toFixed(0)}h</span></div>
+						<div class="flex justify-between text-sm"><span class="text-text-secondary">Visitas documentadas</span><span class="font-semibold text-text">{kpis.totalVisits}</span></div>
+						<div class="mt-3 h-2 bg-surface-sunken rounded-full overflow-hidden">
+							<div class="h-full bg-info rounded-full" style="width: {Math.min(100, kpis.activeCollaborators > 0 ? 100 : 0)}%"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="bg-surface rounded-xl border border-border p-5">
+				<h4 class="text-sm font-semibold text-text mb-3">Resumen de Impacto ODS</h4>
+				<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+					<div class="bg-success/5 rounded-lg p-3">
+						<p class="text-xl font-bold text-success">{kpis.totalHealthRecords > 0 && kpis.activeProviders > 0 ? '100%' : kpis.totalHealthRecords > 0 ? '50%' : '0%'}</p>
+						<p class="text-xs text-text-muted mt-1">ODS 3</p>
+					</div>
+					<div class="bg-warning/5 rounded-lg p-3">
+						<p class="text-xl font-bold text-warning">{kpis.geolocatedPct >= 80 && kpis.incidentResolutionRate >= 60 ? '100%' : kpis.geolocatedPct >= 50 ? '66%' : '33%'}</p>
+						<p class="text-xs text-text-muted mt-1">ODS 11</p>
+					</div>
+					<div class="bg-primary/5 rounded-lg p-3">
+						<p class="text-xl font-bold text-primary">{kpis.sterilizationRate >= 70 ? '100%' : kpis.sterilizationRate >= 40 ? '66%' : '33%'}</p>
+						<p class="text-xs text-text-muted mt-1">ODS 15</p>
+					</div>
+					<div class="bg-info/5 rounded-lg p-3">
+						<p class="text-xl font-bold text-info">{kpis.activeCollaborators > 0 && kpis.volunteerHours > 0 ? '100%' : kpis.activeCollaborators > 0 ? '50%' : '0%'}</p>
+						<p class="text-xs text-text-muted mt-1">ODS 16</p>
+					</div>
+				</div>
 			</div>
 		</div>
 	{/if}

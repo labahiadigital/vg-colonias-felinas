@@ -137,6 +137,37 @@
 							<span class="text-text-secondary text-warning">{t(locale, 'visits.incident')}</span>
 						</label>
 					</div>
+					<div class="md:col-span-2 bg-surface-sunken/50 rounded-lg p-4 border border-border/50">
+						<p class="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">{t(locale, 'visits.feeding_details')}</p>
+						<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+							<div>
+								<label for="foodQuantityKg" class="block text-xs text-text-secondary mb-1">{t(locale, 'visits.food_qty_kg')}</label>
+								<input type="number" name="foodQuantityKg" id="foodQuantityKg" min="0" step="0.1" placeholder="0.0" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
+							</div>
+							<div>
+								<label for="foodType" class="block text-xs text-text-secondary mb-1">{t(locale, 'visits.food_type')}</label>
+								<select name="foodType" id="foodType" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+									<option value="">—</option>
+									<option value="dry">{t(locale, 'visits.food_dry')}</option>
+									<option value="wet">{t(locale, 'visits.food_wet')}</option>
+									<option value="mixed">{t(locale, 'visits.food_mixed')}</option>
+									<option value="special">{t(locale, 'visits.food_special')}</option>
+								</select>
+							</div>
+							<div>
+								<label for="waterQuantityL" class="block text-xs text-text-secondary mb-1">{t(locale, 'visits.water_qty_l')}</label>
+								<input type="number" name="waterQuantityL" id="waterQuantityL" min="0" step="0.1" placeholder="0.0" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
+							</div>
+							<div>
+								<label for="feedingCostEur" class="block text-xs text-text-secondary mb-1">{t(locale, 'visits.feeding_cost')}</label>
+								<input type="number" name="feedingCostEur" id="feedingCostEur" min="0" step="0.01" placeholder="0.00" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
+							</div>
+						</div>
+						<div class="mt-3">
+							<label for="specialNeeds" class="block text-xs text-text-secondary mb-1">{t(locale, 'visits.special_needs')}</label>
+							<input type="text" name="specialNeeds" id="specialNeeds" placeholder={t(locale, 'visits.special_needs_placeholder')} class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
+						</div>
+					</div>
 					<div class="md:col-span-2">
 						<label for="notes" class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'visits.notes')}</label>
 						<textarea name="notes" id="notes" rows="2" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors resize-none"></textarea>

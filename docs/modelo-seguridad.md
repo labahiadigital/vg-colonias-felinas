@@ -107,10 +107,17 @@ Cada registro incluye: usuario, fecha/hora, acción, entidad, detalles.
 - Actualizaciones de seguridad prioritarias.
 - Registro de versiones (CHANGELOG).
 
-## 12. Elementos [PENDIENTE DE CONFIRMAR]
+## 12. ENS Categoría Media
 
-- ENS (Esquema Nacional de Seguridad): categoría y nivel.
-- Certificaciones de seguridad requeridas.
-- Auditoría de seguridad externa.
-- Plan de respuesta a incidentes de seguridad.
-- Política de contraseñas definitiva del Ayuntamiento.
+| Requisito | Estado |
+|-----------|--------|
+| Categoría ENS | Media |
+| MFA/TOTP | Implementado (Better Auth twoFactor plugin) |
+| Plan de respuesta a incidentes | Implementado (docs/plan-incidentes-seguridad.md) |
+| Rotación de contraseñas | 90 días (configurable vía PASSWORD_ROTATION_DAYS) |
+| Bloqueo por intentos fallidos | 5 intentos, bloqueo 30 min (configurable) |
+| Registro de intentos de acceso | Tabla login_attempts (email, IP, user-agent, resultado) |
+| Registro de incidentes | Tabla security_incidents (tipo, severidad, estado) |
+| Longitud mínima de contraseña | 12 caracteres |
+| Declaración de Aplicabilidad | Incluida en plan-incidentes-seguridad.md |
+| Auditoría de seguridad externa | Pendiente de contratación |

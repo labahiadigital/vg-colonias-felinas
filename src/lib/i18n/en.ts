@@ -921,6 +921,13 @@ const en: Record<string, string> = {
 	'dashboard.view_all': 'View all',
 	'dashboard.pending_requests': 'pending requests',
 	'dashboard.review_now': 'Review now',
+	'dashboard.ods_title': 'SDG Impact',
+	'dashboard.ods3': 'Health & Well-being',
+	'dashboard.ods11': 'Sustainable Cities',
+	'dashboard.ods15': 'Life on Land',
+	'dashboard.ods15_detail': 'TNR actions completed',
+	'dashboard.ods16': 'Strong Institutions',
+	'dashboard.ods16_detail': 'inspections carried out',
 	'dashboard.compliance_subtitle': '6 regulatory frameworks monitored in real time',
 	'dashboard.requirements': 'requirements',
 	'dashboard.volunteering': 'Volunteering',
@@ -970,7 +977,16 @@ const en: Record<string, string> = {
 	'onboarding.create_colony': 'Create your first colony',
 	'onboarding.register_cat': 'Register a first cat',
 	'onboarding.invite_collaborator': 'Invite a collaborator',
-	'onboarding.explore_map': 'Explore the map'
+	'onboarding.explore_map': 'Explore the map',
+
+	'reports.regulatory_templates_title': 'Multi-Country Regulatory Templates',
+	'reports.regulatory_templates_subtitle': 'Generate official reports adapted to each country\'s regulations',
+	'reports.regulatory_country': 'Country',
+	'reports.regulatory_org': 'Organization / Entity',
+	'reports.regulatory_org_placeholder': 'E.g.: City Council of...',
+	'reports.regulatory_municipio': 'Municipality / City',
+	'reports.regulatory_municipio_placeholder': 'E.g.: Madrid',
+	'reports.generate_report': 'Generate'
 };
 
 export default en;

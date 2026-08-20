@@ -944,6 +944,13 @@ const ca: Record<string, string> = {
 	'dashboard.view_all': 'Veure tot',
 	'dashboard.pending_requests': 'sol·licituds pendents',
 	'dashboard.review_now': 'Revisar ara',
+	'dashboard.ods_title': 'Impacte ODS',
+	'dashboard.ods3': 'Salut i Benestar',
+	'dashboard.ods11': 'Ciutats Sostenibles',
+	'dashboard.ods15': 'Vida Terrestre',
+	'dashboard.ods15_detail': 'accions CER completades',
+	'dashboard.ods16': 'Institucions Sòlides',
+	'dashboard.ods16_detail': 'inspeccions realitzades',
 	'dashboard.compliance_subtitle': '6 marcs normatius monitoritzats en temps real',
 	'dashboard.requirements': 'requisits',
 	'dashboard.volunteering': 'Voluntariat',
@@ -993,7 +1000,16 @@ const ca: Record<string, string> = {
 	'onboarding.create_colony': 'Crear la teva primera colònia',
 	'onboarding.register_cat': 'Registrar un primer gat',
 	'onboarding.invite_collaborator': 'Convidar un col·laborador',
-	'onboarding.explore_map': 'Explorar el mapa'
+	'onboarding.explore_map': 'Explorar el mapa',
+
+	'reports.regulatory_templates_title': 'Plantilles Regulat\u00f2ries Multi-Pa\u00eds',
+	'reports.regulatory_templates_subtitle': 'Genereu informes oficials adaptats a la normativa de cada pa\u00eds',
+	'reports.regulatory_country': 'Pa\u00eds',
+	'reports.regulatory_org': 'Organitzaci\u00f3 / Entitat',
+	'reports.regulatory_org_placeholder': 'Ex: Ajuntament de...',
+	'reports.regulatory_municipio': 'Municipi / Localitat',
+	'reports.regulatory_municipio_placeholder': 'Ex: Barcelona',
+	'reports.generate_report': 'Generar'
 };
 
 export default ca;

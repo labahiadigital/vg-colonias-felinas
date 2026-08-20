@@ -8,6 +8,7 @@
 	let coloniesData = $derived(data.colonies);
 	let feedingPointsData = $derived(data.feedingPoints);
 	let incidentsData = $derived(data.incidents);
+	let heatmapData = $derived(data.heatmapData);
 
 	let mapContainer: HTMLDivElement;
 	let map: any;
@@ -21,7 +22,10 @@
 		incidents: true,
 		criticalZones: false,
 		sensitiveZones: false,
-		campingZones: false
+		campingZones: false,
+		heatCatDensity: false,
+		heatIncidents: false,
+		heatVolunteer: false
 	});
 	let statusFilter = $state('all');
 	let districtFilter = $state('all');
@@ -36,6 +40,9 @@
 		void layersVisible.criticalZones;
 		void layersVisible.sensitiveZones;
 		void layersVisible.campingZones;
+		void layersVisible.heatCatDensity;
+		void layersVisible.heatIncidents;
+		void layersVisible.heatVolunteer;
 		Object.entries(layerGroups).forEach(([key, group]) => {
 			const k = key as keyof typeof layersVisible;
 			if (layersVisible[k]) { if (!map.hasLayer(group)) group.addTo(map); }
@@ -149,13 +156,36 @@
 				.addTo(sensitiveGroup);
 		});
 
+		let heatCatGroup: any = L.layerGroup();
+		let heatIncGroup: any = L.layerGroup();
+		let heatVolGroup: any = L.layerGroup();
+
+		try {
+			await import('leaflet.heat');
+			if (heatmapData.catDensity.length > 0) {
+				const catHeat = (L as any).heatLayer(heatmapData.catDensity, { radius: 35, blur: 25, maxZoom: 17, gradient: { 0.2: '#eff6ff', 0.4: '#93c5fd', 0.6: '#3b82f6', 0.8: '#1d4ed8', 1: '#1e3a5f' } });
+				catHeat.addTo(heatCatGroup);
+			}
+			if (heatmapData.incidentFrequency.length > 0) {
+				const incHeat = (L as any).heatLayer(heatmapData.incidentFrequency, { radius: 30, blur: 20, maxZoom: 17, gradient: { 0.2: '#fef3c7', 0.4: '#fbbf24', 0.6: '#f59e0b', 0.8: '#dc2626', 1: '#991b1b' } });
+				incHeat.addTo(heatIncGroup);
+			}
+			if (heatmapData.volunteerActivity.length > 0) {
+				const volHeat = (L as any).heatLayer(heatmapData.volunteerActivity, { radius: 30, blur: 20, maxZoom: 17, gradient: { 0.2: '#ecfdf5', 0.4: '#6ee7b7', 0.6: '#10b981', 0.8: '#059669', 1: '#064e3b' } });
+				volHeat.addTo(heatVolGroup);
+			}
+		} catch (_) { /* leaflet.heat not available */ }
+
 		layerGroups = {
 			colonies: colonyGroup,
 			feedingPoints: fpGroup,
 			incidents: incGroup,
 			criticalZones: criticalGroup,
 			sensitiveZones: sensitiveGroup,
-			campingZones: campingGroup
+			campingZones: campingGroup,
+			heatCatDensity: heatCatGroup,
+			heatIncidents: heatIncGroup,
+			heatVolunteer: heatVolGroup
 		};
 
 		colonyGroup.addTo(map);
@@ -211,6 +241,21 @@
 				{ key: 'criticalZones', color: 'bg-danger', label: t(locale, 'map.layer.critical_zones') },
 				{ key: 'sensitiveZones', color: 'bg-accent', label: t(locale, 'map.layer.sensitive_zones') },
 				{ key: 'campingZones', color: 'bg-primary', label: t(locale, 'map.layer.camping_zones') }
+			] as layer}
+				<label for={`layer-${layer.key}`} class="flex items-center justify-between p-2.5 bg-surface-sunken rounded-lg cursor-pointer hover:bg-border transition-colors min-h-[44px]">
+					<div class="flex items-center gap-2.5 text-sm text-text-secondary">
+						<span class="w-2.5 h-2.5 rounded-full {layer.color}"></span>
+						{layer.label}
+					</div>
+					<input type="checkbox" id={`layer-${layer.key}`} bind:checked={layersVisible[layer.key as keyof typeof layersVisible]} class="rounded border-border text-primary focus:ring-primary/20" />
+				</label>
+			{/each}
+
+			<p class="px-2 mt-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted/70">{t(locale, 'map.heatmaps')}</p>
+			{#each [
+				{ key: 'heatCatDensity', color: 'bg-blue-500', label: t(locale, 'map.heat.cat_density') },
+				{ key: 'heatIncidents', color: 'bg-red-500', label: t(locale, 'map.heat.incidents') },
+				{ key: 'heatVolunteer', color: 'bg-emerald-500', label: t(locale, 'map.heat.volunteer') }
 			] as layer}
 				<label for={`layer-${layer.key}`} class="flex items-center justify-between p-2.5 bg-surface-sunken rounded-lg cursor-pointer hover:bg-border transition-colors min-h-[44px]">
 					<div class="flex items-center gap-2.5 text-sm text-text-secondary">

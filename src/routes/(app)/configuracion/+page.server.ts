@@ -147,9 +147,9 @@ export const actions: Actions = {
 		const fd = await request.formData();
 		const roleId = Number(fd.get('roleId'));
 		const permissionId = Number(fd.get('permissionId'));
-		const action = fd.get('action') as string;
+		const permAction = fd.get('permAction') as string;
 
-		if (action === 'add') {
+		if (permAction === 'add') {
 			const existing = await db.select().from(rolePermissions)
 				.where(and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.permissionId, permissionId)))
 				.limit(1);

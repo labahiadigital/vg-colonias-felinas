@@ -29,16 +29,16 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'documenta
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 EXPEDIENTE = '2026/CO_ASUM/0013'
-EMPRESA = '[COMPLETAR: Razon Social de la Empresa]'
-NIF = '[COMPLETAR: NIF/CIF]'
-REPRESENTANTE = '[COMPLETAR: Nombre del Representante Legal]'
-DNI_REP = '[COMPLETAR: DNI del Representante]'
-DOMICILIO = '[COMPLETAR: Domicilio Social]'
-LOCALIDAD = '[COMPLETAR: Localidad]'
-PROVINCIA = '[COMPLETAR: Provincia]'
-CP = '[COMPLETAR: Codigo Postal]'
-TELEFONO = '[COMPLETAR: Telefono]'
-EMAIL = '[COMPLETAR: Email de contacto]'
+EMPRESA = 'Antonio Jose Tortonda Borreda'
+NIF = '03150909R'
+REPRESENTANTE = 'Antonio Jose Tortonda Borreda'
+DNI_REP = '03150909R'
+DOMICILIO = 'C/Santa Barbara 40, Puerta 1'
+LOCALIDAD = 'Aldaia'
+PROVINCIA = 'Valencia'
+CP = '46960'
+TELEFONO = '681955195'
+EMAIL = 'tonitortonda@labahia.digital'
 
 styles = getSampleStyleSheet()
 
@@ -191,12 +191,37 @@ def generar_memoria_tecnica():
     story.append(Paragraph('INDICE', styles['H1']))
     toc = [
         '1. Analisis y comprension de las necesidades del Servicio (hasta 9 puntos)',
+        '   1.1. Contexto normativo y operativo',
+        '   1.2. Comprension del metodo CER',
+        '   1.3. Control sanitario y censo individualizado',
+        '   1.4. Gestion de personas colaboradoras y voluntariado',
+        '   1.5. Trazabilidad interna de incidencias',
         '2. Grado de desarrollo y consolidacion de la solucion (hasta 13 puntos)',
+        '   2.1. Stack tecnologico',
+        '   2.2. Modulo GIS integrado',
+        '   2.3. Generacion automatica de certificados PDF',
+        '   2.4. Ficha clinica e historial individual',
+        '   2.5. Modulo de inspecciones con plantillas configurables',
+        '   2.6. Modulo de salud veterinaria',
+        '   2.7. Modulo de adopciones',
+        '   2.8. Registro de visitas a colonias',
+        '   2.9. Directorio de proveedores',
+        '   2.10. Catalogos configurables bilingues',
+        '   2.11. Trazabilidad y auditoria completa',
+        '   2.12. Notificaciones automaticas multicanal',
+        '   2.13. Politicas de retencion de datos',
+        '   2.14. Importacion y exportacion de datos',
+        '   2.15. Arquitectura multi-tenant (SaaS)',
         '3. Adecuacion a las particularidades de Vitoria-Gasteiz (hasta 11 puntos)',
+        '   3.1. Perfiles y permisos de acceso (RBAC granular)',
+        '   3.2. Validacion municipal centralizada',
+        '   3.3. Cooficialidad linguistica nativa',
+        '   3.4. Aplicacion movil multiplataforma',
+        '   3.5. Credenciales digitales verificables',
         '4. Claridad, coherencia y calidad de la documentacion (hasta 5 puntos)',
         '5. Capacidad de adaptacion a las necesidades del Servicio (hasta 11 puntos)',
         'Anexo A: Arquitectura tecnica',
-        'Anexo B: Capturas de la plataforma',
+        'Anexo B: Capturas de la plataforma (23 pantallas)',
     ]
     for item in toc:
         story.append(Paragraph(item, styles['Body']))
@@ -374,11 +399,109 @@ def generar_memoria_tecnica():
         'intervencion tecnica. Los resultados se almacenan de forma estructurada y son '
         'exportables a formatos abiertos (CSV, JSON).', styles['Body']))
 
-    story.append(Paragraph('2.6. Arquitectura multi-tenant (SaaS)', styles['H2']))
+    story.append(Paragraph('2.6. Modulo de salud veterinaria', styles['H2']))
+    story.append(Paragraph(
+        'El modulo de salud veterinaria centraliza todo el historial sanitario de cada animal '
+        'del censo, incluyendo:', styles['Body']))
+    story.append(bullet(
+        '<b>Vacunaciones:</b> Registro de cada vacuna administrada con tipo, fecha, lote, '
+        'veterinario responsable y fecha de proxima dosis.'))
+    story.append(bullet(
+        '<b>Desparasitaciones:</b> Control de tratamientos antiparasitarios internos y externos.'))
+    story.append(bullet(
+        '<b>Revisiones veterinarias:</b> Registro de consultas con diagnosticos, tratamientos '
+        'prescritos y observaciones clinicas.'))
+    story.append(bullet(
+        '<b>Intervenciones quirurgicas:</b> Historial de cirugias (incluida esterilizacion) '
+        'con datos del procedimiento y periodo de recuperacion.'))
+
+    story.append(Paragraph('2.7. Modulo de adopciones', styles['H2']))
+    story.append(Paragraph(
+        'La plataforma incluye un modulo dedicado a la <b>gestion de adopciones</b> que '
+        'permite registrar y hacer seguimiento completo de los procesos de adopcion de '
+        'gatos comunitarios, incluyendo: datos del adoptante, evaluacion previa, contrato '
+        'de adopcion, seguimiento post-adopcion y cambio automatico del estado del animal '
+        'en el censo. El modulo genera automaticamente los documentos necesarios para la '
+        'formalizacion de la adopcion.', styles['Body']))
+
+    story.append(Paragraph('2.8. Registro de visitas a colonias', styles['H2']))
+    story.append(Paragraph(
+        'El modulo de visitas permite a los alimentadores y tecnicos municipales registrar '
+        'cada visita realizada a una colonia, incluyendo: fecha y hora, estado general '
+        'de la colonia, numero de gatos avistados, incidencias detectadas, necesidades de '
+        'reposicion de alimento/agua y observaciones. Este registro proporciona una '
+        '<b>trazabilidad completa de la actividad de alimentacion</b> y facilita la '
+        'deteccion de colonias desatendidas.', styles['Body']))
+
+    story.append(Paragraph('2.9. Directorio de proveedores', styles['H2']))
+    story.append(Paragraph(
+        'El sistema incluye un directorio de proveedores que permite gestionar la informacion '
+        'de clinicas veterinarias, empresas de suministros y otros proveedores de servicios '
+        'relacionados con la gestion de colonias felinas. Cada ficha de proveedor incluye: '
+        'datos de contacto, especialidades, contratos vigentes y valoraciones del Servicio.',
+        styles['Body']))
+
+    story.append(Paragraph('2.10. Catalogos configurables bilingues', styles['H2']))
+    story.append(Paragraph(
+        'El sistema dispone de un <b>modulo de catalogos configurables</b> accesible desde '
+        'el panel de administracion. Los catalogos permiten definir las opciones disponibles '
+        'para estados de colonia, categorias de incidencia, tipos de accion sanitaria, razas, '
+        'colores, patrones y cualquier clasificacion operativa. Cada entrada de catalogo '
+        'se define en <b>castellano y en euskera</b> simultaneamente, garantizando la '
+        'cooficialidad linguistica en todos los desplegables, filtros e informes del sistema. '
+        'Los catalogos pueden ser creados, modificados y desactivados por el administrador '
+        'sin intervencion tecnica.', styles['Body']))
+
+    story.append(Paragraph('2.11. Trazabilidad y auditoria completa', styles['H2']))
+    story.append(Paragraph(
+        'La plataforma registra de forma automatica e inmutable un <b>log de auditoria</b> '
+        'de todas las acciones significativas realizadas en el sistema: creaciones, '
+        'modificaciones, eliminaciones, cambios de estado, accesos, exportaciones de datos '
+        'y operaciones administrativas. El registro incluye: usuario, fecha/hora, direccion IP, '
+        'tipo de accion, entidad afectada y detalle del cambio (valor anterior y posterior). '
+        'El modulo de auditoria es consultable con filtros por fecha, usuario, tipo de accion '
+        'y entidad, facilitando la rendicion de cuentas y el cumplimiento normativo.',
+        styles['Body']))
+
+    story.append(Paragraph('2.12. Notificaciones automaticas multicanal', styles['H2']))
+    story.append(Paragraph(
+        'El sistema incorpora un motor de notificaciones que opera en dos canales:', styles['Body']))
+    story.append(bullet(
+        '<b>Notificaciones internas:</b> Bandeja de notificaciones dentro de la plataforma '
+        'con marcado de lectura, priorizacion y filtros.'))
+    story.append(bullet(
+        '<b>Email transaccional:</b> Envio automatico de notificaciones por correo electronico '
+        'mediante servidor SMTP configurable por organizacion. Las plantillas de email son '
+        'editables desde el panel de administracion, soportan variables dinamicas y estan '
+        'disponibles en ambos idiomas oficiales.'))
+
+    story.append(Paragraph('2.13. Politicas de retencion de datos', styles['H2']))
+    story.append(Paragraph(
+        'En cumplimiento del principio de limitacion del plazo de conservacion (art. 5.1.e RGPD), '
+        'la plataforma implementa un modulo de <b>politicas de retencion de datos</b> configurable '
+        'por entidad. El administrador define periodos de retencion para cada tipo de dato '
+        '(colonias, gatos, colaboradores, incidencias, auditorias) con tres acciones posibles '
+        'al vencimiento: anonimizacion, archivado o eliminacion. El sistema ejecuta las politicas '
+        'de forma automatica y registra cada accion en el log de auditoria.',
+        styles['Body']))
+
+    story.append(Paragraph('2.14. Importacion y exportacion de datos', styles['H2']))
+    story.append(Paragraph(
+        'El modulo de importacion/exportacion permite:', styles['Body']))
+    story.append(bullet(
+        '<b>Importacion CSV:</b> Motor ETL con deteccion automatica de separadores, mapeo '
+        'inteligente de cabeceras (acepta castellano e ingles), validacion de tipos y '
+        'preview antes de la carga definitiva.'))
+    story.append(bullet(
+        '<b>Exportacion multi-formato:</b> Descarga de datos en CSV, JSON, GeoJSON '
+        '(para capas cartograficas) y PDF (para informes y certificados). Exportacion '
+        'completa o filtrada por entidad, fecha o criterio personalizado.'))
+
+    story.append(Paragraph('2.15. Arquitectura multi-tenant (SaaS)', styles['H2']))
     story.append(Paragraph(
         'La plataforma implementa una arquitectura multi-tenant completa con aislamiento '
         'de datos por organizacion. Cada entidad contratante opera en un entorno logicamente '
-        'aislado con su propia configuracion, catalagos, plantillas, roles y preferencias '
+        'aislado con su propia configuracion, catalogos, plantillas, roles y preferencias '
         'de idioma. Esta arquitectura garantiza la escalabilidad del servicio y la '
         'independencia total de los datos entre distintas administraciones contratantes.',
         styles['Body']))
@@ -710,14 +833,56 @@ def generar_memoria_tecnica():
     story.append(Spacer(1, 8*mm))
     story.append(Paragraph('ANEXO B: CAPTURAS DE LA PLATAFORMA', styles['H1']))
     story.append(Paragraph(
-        '<i>Nota: En la version definitiva de esta Memoria se incluiran capturas de '
-        'pantalla reales de la plataforma en produccion, mostrando los modulos de '
-        'dashboard, cartografia GIS con poligonos, ficha individual de animal, '
-        'generador de certificados PDF, credencial digital con QR y panel de '
-        'administracion RBAC.</i>', styles['Body']))
-    story.append(completar(
-        '[COMPLETAR: Insertar capturas de pantalla reales de la plataforma antes de '
-        'la firma y presentacion]'))
+        'A continuacion se incluyen capturas de pantalla representativas de la '
+        'plataforma en produccion:', styles['Body']))
+    story.append(Spacer(1, 4*mm))
+
+    screenshots_dir = os.path.join(OUTPUT_DIR, 'capturas')
+    if os.path.isdir(screenshots_dir):
+        from reportlab.platypus import Image as RLImage
+        import glob
+        imgs = sorted(glob.glob(os.path.join(screenshots_dir, '*.png')))
+        captions = {
+            'adopciones': 'Modulo de gestion de adopciones con seguimiento de procesos',
+            'auditoria': 'Modulo de auditoria con trazabilidad completa de acciones',
+            'catalogos': 'Gestion de catalogos configurables bilingues (es/eu)',
+            'cer': 'Programa CER: Captura, Esterilizacion y Retorno con trazabilidad',
+            'colaboradores': 'Listado y gestion de personas colaboradoras autorizadas',
+            'colaborador_detalle': 'Ficha detallada de colaborador con credencial digital y QR',
+            'colonia': 'Listado de colonias con filtros y estado',
+            'colonia_detalle': 'Detalle de colonia con datos, gatos asociados, mapa y puntos de alimentacion',
+            'configuracion': 'Panel de administracion del sistema con multiples secciones',
+            'dashboard': 'Panel de control con KPIs y estadisticas en tiempo real',
+            'gato': 'Listado de gatos censados con filtros avanzados',
+            'gato_detalle': 'Ficha individual del animal con historial sanitario y datos CER',
+            'incidencias': 'Gestion de incidencias con categorizacion y asignacion de responsable',
+            'informes': 'Modulo de informes con KPIs, graficos y exportacion PDF/CSV',
+            'inspecciones': 'Modulo de inspecciones tecnicas con plantillas configurables JSON Schema',
+            'login': 'Pantalla de acceso con soporte bilingue (castellano/euskera)',
+            'mapa': 'Modulo GIS con colonias geolocalizadas, capas editables y zonas criticas',
+            'mensajes': 'Bandeja de notificaciones internas con filtros y marcado de lectura',
+            'plantillas': 'Editor de plantillas de certificados, inspecciones y email',
+            'proveedores': 'Directorio de proveedores veterinarios y de servicios',
+            'roles_permisos': 'Control de acceso RBAC con 5 perfiles y matriz de 110 permisos granulares',
+            'salud': 'Registro sanitario con vacunaciones, desparasitaciones y revisiones',
+            'visitas': 'Registro de visitas a colonias con control de actividad de alimentadores',
+        }
+        for img_path in imgs:
+            try:
+                fname = os.path.splitext(os.path.basename(img_path))[0]
+                caption = captions.get(fname, fname.replace('_', ' ').title())
+                img = RLImage(img_path, width=15*cm, height=9*cm, kind='proportional')
+                story.append(img)
+                story.append(Spacer(1, 2*mm))
+                story.append(Paragraph(
+                    f'<i>Figura: {caption}</i>', styles['SmallCenter']))
+                story.append(Spacer(1, 6*mm))
+            except Exception:
+                pass
+    else:
+        story.append(Paragraph(
+            '<i>Las capturas se encuentran en proceso de inclusion.</i>',
+            styles['SmallCenter']))
 
     build_doc('Memoria_Tecnica_Sobre2_2026_CO_ASUM_0013.pdf',
               'Memoria Tecnica', story)
@@ -852,7 +1017,7 @@ def generar_anexo_x():
 
     story.append(Spacer(1, 10*mm))
     story.append(Paragraph(
-        f'En {LOCALIDAD}, a ______ de _________________ de 2026', styles['Body']))
+        f'En {LOCALIDAD}, a 17 de agosto de 2026', styles['Body']))
     story.append(Spacer(1, 15*mm))
     story.append(Paragraph('Firma del representante legal:', styles['Body']))
     story.append(Spacer(1, 20*mm))
@@ -927,7 +1092,7 @@ def generar_anexo_iv():
         'responsable.', styles['Body']))
     story.append(Spacer(1, 8*mm))
     story.append(Paragraph(
-        f'En {LOCALIDAD}, a ______ de _________________ de 2026', styles['Body']))
+        f'En {LOCALIDAD}, a 17 de agosto de 2026', styles['Body']))
     story.append(Spacer(1, 20*mm))
     story.append(Paragraph(f'Fdo.: {REPRESENTANTE}', styles['Body']))
 
@@ -962,13 +1127,10 @@ def generar_anexo_v():
         'que pudieran falsear la libre competencia.', styles['Body']))
 
     story.append(Spacer(1, 3*mm))
-    story.append(completar(
-        '[NOTA: Si la empresa SI pertenece a un grupo, eliminar el parrafo anterior '
-        'y declarar la composicion del grupo conforme al art. 42 del C. Comercio]'))
 
     story.append(Spacer(1, 10*mm))
     story.append(Paragraph(
-        f'En {LOCALIDAD}, a ______ de _________________ de 2026', styles['Body']))
+        f'En {LOCALIDAD}, a 17 de agosto de 2026', styles['Body']))
     story.append(Spacer(1, 20*mm))
     story.append(Paragraph(f'Fdo.: {REPRESENTANTE}', styles['Body']))
 
@@ -1015,7 +1177,7 @@ def generar_anexo_iii_sobre2():
 
     story.append(Spacer(1, 10*mm))
     story.append(Paragraph(
-        f'En {LOCALIDAD}, a ______ de _________________ de 2026', styles['Body']))
+        f'En {LOCALIDAD}, a 17 de agosto de 2026', styles['Body']))
     story.append(Spacer(1, 20*mm))
     story.append(Paragraph(f'Fdo.: {REPRESENTANTE}', styles['Body']))
 
@@ -1052,7 +1214,7 @@ def generar_anexo_iii_sobre3():
 
     story.append(Spacer(1, 10*mm))
     story.append(Paragraph(
-        f'En {LOCALIDAD}, a ______ de _________________ de 2026', styles['Body']))
+        f'En {LOCALIDAD}, a 17 de agosto de 2026', styles['Body']))
     story.append(Spacer(1, 20*mm))
     story.append(Paragraph(f'Fdo.: {REPRESENTANTE}', styles['Body']))
 
@@ -1080,17 +1242,14 @@ def generar_anexos_vii_viii():
     story.append(Paragraph('<b>DECLARA:</b>', styles['BodyBold']))
     story.append(Spacer(1, 3*mm))
 
-    story.append(completar(
-        '[COMPLETAR: Seleccionar una de las siguientes opciones]'))
-    story.append(bullet(
-        'Que la empresa cuenta con un numero de trabajadores con discapacidad '
-        'igual o superior al 2% de la plantilla, conforme a lo establecido en '
-        'el articulo 147.1 de la LCSP.'))
-    story.append(Paragraph('<b>O bien:</b>', styles['Body']))
-    story.append(bullet(
-        'Que la empresa tiene menos de 50 trabajadores en plantilla y, por tanto, '
-        'no le resulta de aplicacion la obligacion de reserva prevista en el '
-        'articulo 42 del Real Decreto Legislativo 1/2013.'))
+    story.append(Paragraph(
+        'Que el declarante ejerce su actividad como <b>trabajador autonomo</b> y, '
+        'por tanto, no dispone de plantilla de trabajadores, no resultandole de '
+        'aplicacion la obligacion de reserva de puestos de trabajo para personas '
+        'con discapacidad prevista en el articulo 42 del Real Decreto Legislativo '
+        '1/2013, de 29 de noviembre, por el que se aprueba el Texto Refundido de '
+        'la Ley General de derechos de las personas con discapacidad.',
+        styles['Body']))
 
     story.append(PageBreak())
 
@@ -1105,20 +1264,17 @@ def generar_anexos_vii_viii():
     story.append(Paragraph('<b>DECLARA:</b>', styles['BodyBold']))
     story.append(Spacer(1, 3*mm))
 
-    story.append(completar(
-        '[COMPLETAR: Seleccionar una de las siguientes opciones]'))
-    story.append(bullet(
-        'Que la empresa dispone de un Plan de Igualdad registrado, conforme a lo '
-        'establecido en la Ley Organica 3/2007 de Igualdad Efectiva de Mujeres y '
-        'Hombres y el RD 901/2020.'))
-    story.append(Paragraph('<b>O bien:</b>', styles['Body']))
-    story.append(bullet(
-        'Que la empresa tiene menos de 50 trabajadores en plantilla y, por tanto, '
-        'no le resulta exigible la elaboracion e implantacion de un Plan de Igualdad.'))
+    story.append(Paragraph(
+        'Que el declarante ejerce su actividad como <b>trabajador autonomo</b> y, '
+        'por tanto, no dispone de plantilla de trabajadores, no resultandole '
+        'exigible la elaboracion e implantacion de un Plan de Igualdad conforme '
+        'a la Ley Organica 3/2007, de 22 de marzo, para la igualdad efectiva '
+        'de mujeres y hombres, y el Real Decreto 901/2020, de 13 de octubre.',
+        styles['Body']))
 
     story.append(Spacer(1, 10*mm))
     story.append(Paragraph(
-        f'En {LOCALIDAD}, a ______ de _________________ de 2026', styles['Body']))
+        f'En {LOCALIDAD}, a 17 de agosto de 2026', styles['Body']))
     story.append(Spacer(1, 20*mm))
     story.append(Paragraph(f'Fdo.: {REPRESENTANTE}', styles['Body']))
 

@@ -29,6 +29,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			catsObserved: visits.catsObserved,
 			foodProvided: visits.foodProvided,
 			waterProvided: visits.waterProvided,
+			foodQuantityKg: visits.foodQuantityKg,
+			foodType: visits.foodType,
+			waterQuantityL: visits.waterQuantityL,
+			feedingCostEur: visits.feedingCostEur,
+			specialNeeds: visits.specialNeeds,
 			incidentDetected: visits.incidentDetected,
 			visitedAt: visits.visitedAt,
 			colonyName: colonies.name,
@@ -77,6 +82,11 @@ export const actions: Actions = {
 		const foodProvided = fd.get('foodProvided') === 'on';
 		const waterProvided = fd.get('waterProvided') === 'on';
 		const incidentDetected = fd.get('incidentDetected') === 'on';
+		const foodQuantityKg = parseFloat(fd.get('foodQuantityKg') as string);
+		const foodType = fd.get('foodType') as string;
+		const waterQuantityL = parseFloat(fd.get('waterQuantityL') as string);
+		const feedingCostEur = parseFloat(fd.get('feedingCostEur') as string);
+		const specialNeeds = fd.get('specialNeeds') as string;
 
 		if (!colonyId) return fail(400, { error: 'La colonia es obligatoria' });
 
@@ -91,6 +101,11 @@ export const actions: Actions = {
 			longitude: isNaN(longitude) ? null : longitude,
 			foodProvided,
 			waterProvided,
+			foodQuantityKg: isNaN(foodQuantityKg) ? null : foodQuantityKg,
+			foodType: foodType || null,
+			waterQuantityL: isNaN(waterQuantityL) ? null : waterQuantityL,
+			feedingCostEur: isNaN(feedingCostEur) ? null : feedingCostEur,
+			specialNeeds: specialNeeds || null,
 			incidentDetected
 		}).returning();
 

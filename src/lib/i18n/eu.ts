@@ -921,6 +921,13 @@ const eu: Record<string, string> = {
 	'dashboard.view_all': 'Denak ikusi',
 	'dashboard.pending_requests': 'eskari bidaliak',
 	'dashboard.review_now': 'Orain berrikusi',
+	'dashboard.ods_title': 'GIH Eragina',
+	'dashboard.ods3': 'Osasuna eta Ongizatea',
+	'dashboard.ods11': 'Hiri Jasangarriak',
+	'dashboard.ods15': 'Lurreko Bizitza',
+	'dashboard.ods15_detail': 'CER ekintza osatuak',
+	'dashboard.ods16': 'Erakunde Sendoak',
+	'dashboard.ods16_detail': 'ikuskapenak eginak',
 	'dashboard.compliance_subtitle': '6 araudi-esparru denbora errealean monitorizatuta',
 	'dashboard.requirements': 'eskakizunak',
 	'dashboard.volunteering': 'Boluntariotza',
@@ -970,7 +977,16 @@ const eu: Record<string, string> = {
 	'onboarding.create_colony': 'Zure lehen kolonia sortu',
 	'onboarding.register_cat': 'Lehen katu bat erregistratu',
 	'onboarding.invite_collaborator': 'Laguntzaile bat gonbidatu',
-	'onboarding.explore_map': 'Mapa esploratu'
+	'onboarding.explore_map': 'Mapa esploratu',
+
+	'reports.regulatory_templates_title': 'Herrialde Anitzeko Txantiloi Arautzaileak',
+	'reports.regulatory_templates_subtitle': 'Sortu herrialde bakoitzaren araudiara egokitutako txosten ofizialak',
+	'reports.regulatory_country': 'Herrialdea',
+	'reports.regulatory_org': 'Erakundea / Entitatea',
+	'reports.regulatory_org_placeholder': 'Adib: Udala...',
+	'reports.regulatory_municipio': 'Udalerria / Herria',
+	'reports.regulatory_municipio_placeholder': 'Adib: Vitoria-Gasteiz',
+	'reports.generate_report': 'Sortu'
 };
 
 export default eu;

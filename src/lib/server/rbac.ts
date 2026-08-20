@@ -24,12 +24,22 @@ export async function getUserPermissions(userId: string): Promise<Array<{ module
 	return result;
 }
 
+export function checkPermissionMatch(
+	role: string | null,
+	perms: Array<{ module: string; action: string }>,
+	module: string,
+	action: string
+): boolean {
+	if (role === 'admin') return true;
+	return perms.some(p => p.module === module && (p.action === action || p.action === '*'));
+}
+
 export async function hasPermission(userId: string, module: string, action: string): Promise<boolean> {
 	const role = await getUserRole(userId);
 	if (role === 'admin') return true;
 
 	const perms = await getUserPermissions(userId);
-	return perms.some(p => p.module === module && (p.action === action || p.action === '*'));
+	return checkPermissionMatch(role, perms, module, action);
 }
 
 export function requireAuth(locals: App.Locals): asserts locals is App.Locals & { user: NonNullable<App.Locals['user']> } {

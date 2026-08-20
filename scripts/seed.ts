@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { neon } from '@neondatabase/serverless';
 import { scryptSync, randomBytes } from 'crypto';
 

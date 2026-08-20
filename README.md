@@ -1,8 +1,8 @@
 # Gatopolis — Donde cada gato cuenta
 
-Plataforma SaaS responsive para la gestión integral de colonias felinas urbanas, diseñada para ayuntamientos, diputaciones, asociaciones protectoras y entidades gestoras.
+Plataforma SaaS responsive para la gestión integral de colonias felinas urbanas, diseñada para ayuntamientos, diputaciones, asociaciones protectoras y entidades gestoras de toda Europa.
 
-**Versión:** 2.0.0-saas
+**Versión:** 3.0.0-saas-eu
 **Expediente inicial:** 2026/CO_ASUM/0013 (Vitoria-Gasteiz)
 
 ## Arquitectura SaaS
@@ -17,6 +17,7 @@ Plataforma SaaS responsive para la gestión integral de colonias felinas urbanas
 | **Navegadores** | Últimas 2 versiones de Chrome, Firefox, Safari, Edge |
 | **RPO / RTO** | < 24h / < 4h |
 | **Disponibilidad** | 99,5% mensual |
+| **ENS** | Categoría Media (MFA/TOTP, rotación contraseñas, plan de incidentes) |
 
 ## Stack Tecnológico
 
@@ -24,22 +25,27 @@ Plataforma SaaS responsive para la gestión integral de colonias felinas urbanas
 |---|---|
 | Frontend | SvelteKit 5 + TypeScript |
 | CSS | Tailwind CSS 4 |
-| Base de datos | PostgreSQL (Neon, UE) |
+| Base de datos | PostgreSQL (Neon Serverless, UE) |
 | ORM | Drizzle ORM |
-| Autenticación | Better Auth (rate limited, min 8 chars) |
-| Mapas | Leaflet + Leaflet Draw + OpenStreetMap |
+| Autenticación | Better Auth (bcrypt, rate limiting, MFA/TOTP, rotación contraseñas) |
+| Mapas | Leaflet + Leaflet Draw + Leaflet.heat + OpenStreetMap |
 | Email | SMTP genérico (configurable por organización) |
-| Idiomas | ES (Castellano) + EU (Euskera) |
+| Idiomas | ES, EU, EN, CA, GL, PT, IT, FR (8 idiomas) |
 | Validación | Zod |
+| Testing | Vitest + @testing-library/svelte + Playwright E2E |
+| PWA | Service Worker + IndexedDB (offline queue) |
+| Push | Web Push API (VAPID) + fallback email |
+| IA | OpenAI Vision (identificación felina) |
 
-## Módulos Funcionales
+## Módulos Funcionales (23+)
 
 ### 1. Dashboard
-KPIs en tiempo real, actividad reciente, accesos rápidos a todos los módulos.
+KPIs en tiempo real, actividad reciente, accesos rápidos, **panel de indicadores ODS** (ODS 3, 11, 15, 16) con métricas de impacto.
 
 ### 2. Cartografía y Geolocalización
 - Mapa interactivo con capas editables (colonias, puntos de alimentación, incidencias, zonas críticas/sensibles/campeo).
 - **Leaflet Draw** para crear/editar polígonos, líneas y puntos con exportación GeoJSON.
+- **Mapas de calor (Heatmaps)** con Leaflet.heat: densidad de gatos, frecuencia de incidencias, actividad de voluntarios.
 - Filtros por estado y distrito. Geolocalización automática desde móvil.
 
 ### 3. Gestión de Colonias
@@ -48,115 +54,157 @@ CRUD completo, ficha detallada con geolocalización, asociación con gatos/incid
 ### 4. Censo Individual de Gatos
 Ficha con **fotografía** (subida directa + cámara móvil), sexo, microchip, estado, historial sanitario, CER, adopciones. Certificados generables desde ficha.
 
-### 5. Salud Animal
+### 5. Identificación Felina por IA (AI Cat ID)
+- Análisis de foto con OpenAI Vision para identificar gatos por patrón de pelaje/marcas.
+- Búsqueda de coincidencias en el censo registrado con scoring por similitud.
+- Siempre sugiere, nunca confirma automáticamente.
+
+### 6. Salud Animal
 Vacunación, esterilización, desparasitación, microchip, cirugía, revisión. Vinculación con gato/colonia. Identificación veterinario/clínica.
 
-### 6. Programa CER
-Captura-Esterilización-Retorno. Relación animal/colonia. Indicadores por fases.
+### 7. Programa CER/TNR
+Captura-Esterilización-Retorno. Relación animal/colonia. Indicadores por fases. Terminología adaptable por país (CER/TNR/TNVR).
 
-### 7. Incidencias y Quejas
+### 8. Campañas de Captura
+- Planificación de campañas CER/TNR con fecha inicio/fin, colonia objetivo, voluntarios y equipos asignados.
+- **Timeline visual** de eventos de campaña (colocación de jaula, captura, recogida).
+- Registro de eventos con marcas temporales y responsable.
+
+### 9. Banco de Material (Trap Bank)
+- Control de jaulas trampa, lectoras de microchip, transportines, tolvas.
+- Sistema de préstamo con fecha límite y alertas de material no devuelto.
+- **Historial de uso** por equipo con registro de acciones.
+
+### 10. Incidencias y Quejas
 Geolocalización automática, categorización, prioridad, asignación de responsable con **notificación automática**, historial de comentarios, **adjuntar fotografías**.
 
-### 8. Inspecciones
+### 11. Inspecciones
 **Plantillas configurables** de inspección (JSON schema). Formulario móvil con evaluación rápida. Resultados estructurados.
 
-### 9. Colaboradores
+### 12. Colaboradores
 Registro/aprobación, **credencial digital con QR verificable** (hash SHA-256), verificación pública vía `/api/verificar/[hash]`, gestión LOPD, notificaciones de cambio de estado.
 
-### 10. Adopciones
+### 13. Adopciones
 Flujo completo con cambio automático de estado del gato. Consentimiento informado. Notificaciones.
 
-### 11. Comunicaciones
-Chat interno con carga en tiempo real. Notificaciones por canal interno + **email** (SMTP configurable).
+### 14. Visitas a Colonias (Control de Alimentación)
+Registro de cada visita con **control detallado de insumos**: cantidad de alimento (kg), tipo de pienso (seco/húmedo/mixto/especial), agua (litros), coste por reposición, necesidades especiales. Trazabilidad de horas de voluntariado.
 
-### 12. Informes e Indicadores
-KPIs, gráficos, exportación CSV por entidad, exportación PDF, **exportación completa** (JSON/CSV de toda la BD).
+### 15. Proveedores
+Directorio de clínicas veterinarias y proveedores de servicios. Ficha con datos de contacto, especialidades, contratos vigentes. Registro de intervenciones con costes asociados.
 
-### 13. Configuración y Administración
+### 16. Comunicaciones
+Chat interno con carga en tiempo real. Notificaciones por canal interno + **email** + **Web Push** (VAPID). Grupos por colonia, zona y rol. Fallback a email si push no disponible.
+
+### 17. Informes e Indicadores
+- KPIs, gráficos, exportación CSV por entidad, exportación PDF, exportación completa (JSON/CSV).
+- **Motor de subvenciones DGDA** con generación automática de memorias.
+- **Panel de conformidad regulatoria** (Ley 7/2023, RGPD, Directiva Hábitats, Biodiversidad 2030, TFUE, One Health).
+- **Panel ODS** con métricas de impacto para los Objetivos de Desarrollo Sostenible.
+- **Plantillas regulatorias multi-país** (ES, PT, IT, FR) con generación automática de informes oficiales.
+
+### 18. Portal Ciudadano (/reportar)
+Portal público sin login para que vecinos reporten avistamientos de gatos abandonados o en peligro. Foto + GPS + descripción. No muestra ubicaciones de colonias (seguridad).
+
+### 19. Panel de Superadmin
+Vista global de todas las organizaciones, métricas de uso (usuarios, operaciones, colonias), gestión de la plataforma.
+
+### 20. Configuración y Administración
 - Perfil y preferencias de usuario.
-- **RBAC**: gestión de usuarios, roles personalizados, matriz de permisos (11 módulos × 10 acciones = 110 permisos base).
-- **Catálogos** configurables bilingües.
-- **Plantillas de inspección** (JSON schema editor).
-- **Plantillas de certificado** (HTML personalizable).
-- **Plantillas de email** (variables: `{{nombre}}`, `{{estado}}`, `{{enlace}}`).
-- **Políticas de retención** de datos (por entidad, con acciones: anonimizar/eliminar/archivar).
-- **Importación CSV** (colonias, gatos, colaboradores, incidencias, salud).
-- **Exportación completa** de datos (reversibilidad).
+- **MFA/TOTP** (2FA con Google Authenticator, Authy, etc.).
+- **RBAC**: gestión de usuarios, roles personalizados, matriz de permisos (11 módulos × 10 acciones).
+- **Catálogos** configurables multilingües.
+- **Plantillas** de inspección, certificado, email.
+- **Políticas de retención** de datos.
+- **Importación CSV** / **Exportación completa**.
 - Registro de auditoría.
 
-## Subida de Archivos
+## Internacionalización (8 idiomas)
 
-- Endpoint `/api/upload` con validación MIME (JPEG, PNG, WebP, GIF, PDF, XLSX, DOCX).
-- Tamaño máximo: 10MB.
-- Componente `FileUpload.svelte` con preview y captura desde cámara (`capture="environment"`).
-- Integrado en gatos, incidencias.
+| Código | Idioma | Estado |
+|---|---|---|
+| ES | Castellano | Completo (~1080 claves) |
+| EU | Euskera | Completo |
+| EN | English | Completo |
+| CA | Català | Completo |
+| GL | Galego | Completo |
+| PT | Português | Completo |
+| IT | Italiano | Completo |
+| FR | Français | Completo |
 
-## Certificados Oficiales
+Terminología adaptable por país: CER (España) = TNR (internacional) = TNVR (EE.UU.). Campo `terminology_profile` en organizaciones.
 
-Tres tipos generables desde la ficha del gato: Sanitario, Esterilización, CER.
-HTML imprimible con número de certificado único, datos completos, espacio para firma.
-**Plantillas personalizables** por organización desde Configuración.
+## Multi-Moneda
 
-## Credenciales Verificables
+Campo `currency` en organizaciones (EUR por defecto). Formateo de importes según locale. Soporte para EUR, GBP, USD, CHF, BRL, PLN, CZK, SEK, NOK, DKK, RON, HUF.
 
-- Hash SHA-256 único por colaborador.
-- QR real generado vía API (qrserver.com).
-- Endpoint público `/api/verificar/[hash]` para verificación sin autenticación.
-- Página de verificación con estado visual (válido/inválido).
+## Plantillas Regulatorias Multi-País
 
-## Notificaciones Automáticas
+| País | Tipo | Marco Legal |
+|---|---|---|
+| 🇪🇸 España | Memoria Anual CER | Ley 7/2023 |
+| 🇪🇸 España | Informe para Pleno Municipal | Ley 7/2023 |
+| 🇵🇹 Portugal | Relatório Anual ICNF | Lei 27/2016 |
+| 🇮🇹 Italia | Relazione Annuale ASL | Legge 281/1991 |
+| 🇫🇷 Francia | Rapport Annuel Préfecture | Code Rural |
 
-Se generan al:
-- Cambiar estado de incidencia, adopción o colaborador.
-- Asignar responsable de incidencia.
+Generación automática con datos recopilados de la BD. Accesibles desde la sección Informes > DGDA.
 
-Canal dual: **interno** (BD) + **email** (si SMTP configurado).
+## PWA con Soporte Offline
 
-## RBAC
+- Service Worker con estrategia cache-first para assets estáticos.
+- Cola de operaciones offline (IndexedDB) para visitas y avistamientos.
+- Sincronización automática al recuperar conexión.
+- Indicador visual de modo offline en la UI.
 
-| Rol | Descripción |
-|---|---|
-| `admin` | Administrador — acceso total |
-| `tecnico` | Personal técnico |
-| `veterinario` | Personal veterinario |
-| `entidad_gestora` | Entidad coordinadora |
-| `colaborador` | Persona colaboradora |
+## Notificaciones Web Push
 
-Permisos: `view`, `create`, `edit`, `validate`, `close`, `export`, `admin`, `access_personal_data`, `access_health_data`, `access_geo_sensitive`.
+- Registro de suscripción push en el navegador (VAPID).
+- Tabla `push_subscriptions` en BD.
+- Envío de push al asignar incidencia, al capturar gato en campaña, al aprobar colaborador.
+- Fallback a email si push no disponible.
 
-## Seguridad
+## API Pública REST (v1)
+
+- Endpoints versionados (`/api/v1/`) con autenticación por API key.
+- Documentación OpenAPI auto-generada en `/api/v1/openapi`.
+- Rate limiting por API key.
+- Endpoints: stats, colonies (CRUD), cats (CRUD).
+
+## Seguridad (ENS Categoría Media)
 
 - Better Auth: bcrypt, sesiones JWT (7 días), rate limiting (10/min).
+- **MFA/TOTP** con Better Auth plugin.
+- **Rotación obligatoria de contraseñas** (configurable, por defecto 90 días).
+- **Bloqueo progresivo por intentos fallidos** (máx. 5 intentos, 30 min bloqueo).
+- **Registro de intentos de acceso** (`loginAttempts`).
+- **Registro de incidentes de seguridad** (`securityIncidents`).
+- **Plan de Respuesta a Incidentes** (doc: `docs/plan-incidentes-seguridad.md`).
 - Contraseñas: mín. 8, máx. 128 caracteres.
 - Cabeceras HTTP: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`.
 - Cifrado TLS en tránsito, AES-256 en reposo (Neon).
 - RBAC con principio de mínimo privilegio.
 - Auditoría completa de todas las acciones.
 - Validación MIME + tamaño en uploads.
-- Acciones destructivas con confirmación.
 
 ## RGPD / Protección de Datos
 
-- Datos en UE (Neon PostgreSQL).
+- Datos en UE (Neon PostgreSQL, región Frankfurt).
 - Sin transferencias internacionales.
 - Políticas de retención configurables por entidad.
 - Información de privacidad para colaboradores (firma digital).
 - Derechos de acceso, rectificación, supresión, portabilidad.
 - Separación de datos personales y operativos.
-- Páginas legales: `/privacidad`, `/terminos`.
 
-## Accesibilidad (WCAG 2.1 AA)
+## Testing
 
-- Skip navigation.
-- Focus visible en todos los controles.
-- `aria-label` en navegación y diálogos.
-- `role` y `aria-modal` en diálogos de confirmación.
-- Contraste adecuado.
-- Formularios con labels asociados.
+| Capa | Herramienta | Cobertura |
+|---|---|---|
+| Unit | Vitest | Utilidades, helpers, validaciones, scoring, CSV, currency, terminology |
+| Integration | Vitest + jsdom | API endpoints, form actions, páginas, auth flow, service worker |
+| E2E | Playwright | Flujos críticos (login, crear colonia, crear gato, crear incidencia) |
 
-## Internacionalización
-
-ES (Castellano) + EU (Euskera) en igualdad. Claves en `src/lib/i18n/`. Catálogos bilingües.
+656+ tests automatizados. Configuración en `vitest.config.ts` y `playwright.config.ts`.
 
 ## Configuración Local
 
@@ -175,11 +223,14 @@ npm install
 DATABASE_URL=postgresql://user:pass@host/dbname?sslmode=require
 BETTER_AUTH_SECRET=clave-secreta-segura-minimo-32-caracteres
 BETTER_AUTH_URL=http://localhost:5173
-SMTP_HOST=smtp.example.com       # Opcional
-SMTP_PORT=587                     # Opcional
-SMTP_USER=user@example.com       # Opcional
-SMTP_PASS=password                # Opcional
-SMTP_FROM=noreply@example.com    # Opcional
+OPENAI_API_KEY=sk-...              # Para identificación IA (opcional)
+VAPID_PUBLIC_KEY=...               # Para Web Push (opcional)
+VAPID_PRIVATE_KEY=...              # Para Web Push (opcional)
+SMTP_HOST=smtp.example.com         # Opcional
+SMTP_PORT=587                      # Opcional
+SMTP_USER=user@example.com         # Opcional
+SMTP_PASS=password                 # Opcional
+SMTP_FROM=noreply@example.com      # Opcional
 ```
 
 ### Migración
@@ -197,6 +248,12 @@ curl -X POST "http://localhost:5173/api/seed?key=seed-2026-vg"
 npm run dev
 ```
 
+### Tests
+```bash
+npm run test           # Vitest (unit + integration)
+npx playwright test    # E2E
+```
+
 ### Credenciales Demo
 
 | Rol | Email | Contraseña |
@@ -211,7 +268,7 @@ npm run dev
 
 | Endpoint | Método | Descripción |
 |---|---|---|
-| `/api/auth/[...all]` | * | Better Auth |
+| `/api/auth/[...all]` | * | Better Auth (login, register, 2FA) |
 | `/api/seed` | POST | Seed demo (key=seed-2026-vg) |
 | `/api/set-locale` | POST | Cambiar idioma |
 | `/api/messages/[conversationId]` | GET | Mensajes de conversación |
@@ -223,87 +280,101 @@ npm run dev
 | `/api/credencial/[id]` | GET | Credencial digital (QR) |
 | `/api/certificado/[catId]` | GET | Certificados (health/sterilization/cer) |
 | `/api/verificar/[hash]` | GET | Verificación pública de credencial |
+| `/api/search` | GET | Búsqueda global |
+| `/api/cat-identify` | POST | Identificación felina por IA |
+| `/api/citizen-report` | POST | Reporte ciudadano (sin auth) |
+| `/api/regulatory-report` | GET | Plantillas regulatorias multi-país |
+| `/api/subsidy-report` | GET | Informe de subvención DGDA |
+| `/api/push-subscribe` | POST | Suscripción/desuscripción push |
+| `/api/v1/stats` | GET | API pública: estadísticas |
+| `/api/v1/colonies` | GET/POST | API pública: colonias |
+| `/api/v1/colonies/[id]` | GET/PUT/DELETE | API pública: colonia individual |
+| `/api/v1/cats` | GET/POST | API pública: gatos |
+| `/api/v1/cats/[id]` | GET/PUT/DELETE | API pública: gato individual |
+| `/api/v1/openapi` | GET | Documentación OpenAPI |
 
 ## Estructura del Proyecto
 
 ```
 src/
 ├── lib/
-│   ├── i18n/                  # ES + EU
+│   ├── i18n/                  # ES, EU, EN, CA, GL, PT, IT, FR
 │   ├── server/
-│   │   ├── db/schema.ts       # Multi-tenant schema (organizations + all entities)
-│   │   ├── auth/              # Better Auth (rate limit, password policy)
+│   │   ├── db/schema.ts       # Multi-tenant schema (30+ tablas)
+│   │   ├── auth/              # Better Auth (MFA/TOTP, rate limit, password rotation)
 │   │   ├── audit.ts           # Auditoría
 │   │   ├── rbac.ts            # RBAC helpers
-│   │   ├── notifications.ts   # Notificaciones (interno + email)
+│   │   ├── notifications.ts   # Notificaciones (interno + email + push)
 │   │   └── email.ts           # SMTP genérico (org-level)
+│   ├── utils/
+│   │   ├── currency.ts        # Multi-moneda
+│   │   ├── terminology.ts     # Perfiles terminológicos por país
+│   │   └── optimistic.ts      # UI optimista
 │   ├── auth-client.ts
 │   └── components/
-│       ├── layout/            # Sidebar, Header
-│       └── ui/                # ConfirmDialog, FileUpload
 ├── routes/
-│   ├── (auth)/
-│   │   ├── login/
-│   │   ├── registro/          # Onboarding SaaS
-│   │   ├── recuperar-contrasena/
-│   │   ├── privacidad/
-│   │   └── terminos/
+│   ├── (auth)/                # Login, registro, recuperación
 │   ├── (app)/                 # Módulos protegidos
-│   │   ├── dashboard/
-│   │   ├── mapa/              # Leaflet + Leaflet Draw
+│   │   ├── dashboard/         # KPIs + ODS panel
+│   │   ├── mapa/              # Leaflet + Leaflet Draw + Heatmaps
 │   │   ├── colonias/          # Lista + [id]
-│   │   ├── gatos/             # Lista + [id] + certificados
+│   │   ├── gatos/             # Lista + [id] + identificar IA
 │   │   ├── salud/
 │   │   ├── cer/
+│   │   ├── campanas/          # Campañas de captura + timeline
+│   │   ├── material/          # Banco de jaulas/material + historial
 │   │   ├── incidencias/
 │   │   ├── inspecciones/
-│   │   ├── colaboradores/     # Lista + [id] + credencial
+│   │   ├── colaboradores/
 │   │   ├── adopciones/
+│   │   ├── visitas/           # Control de alimentación e insumos
+│   │   ├── proveedores/
 │   │   ├── mensajes/
-│   │   ├── informes/
-│   │   └── configuracion/     # RBAC, catálogos, plantillas, retention, import/export
+│   │   ├── informes/          # KPIs + Compliance + DGDA + ODS + Plantillas regulatorias
+│   │   ├── configuracion/     # RBAC, MFA, catálogos, plantillas, retención
+│   │   └── superadmin/        # Panel global de organizaciones
+│   ├── reportar/              # Portal ciudadano (sin login)
 │   └── api/
+├── static/
+│   ├── sw.js                  # Service Worker (cache + offline queue + push)
+│   └── manifest.json          # PWA manifest
+tests/
+├── unit/                      # Tests unitarios
+├── integration/               # Tests de integración
+└── e2e/                       # Tests E2E (Playwright)
 docs/
-├── plan-migracion.md
-├── plan-reversibilidad.md
-├── estrategia-pruebas.md
-├── plan-copias-seguridad.md
+├── plan-incidentes-seguridad.md
 ├── modelo-seguridad.md
-└── proteccion-datos.md
+├── proteccion-datos.md
+├── plan-copias-seguridad.md
+├── estrategia-pruebas.md
+├── plan-reversibilidad.md
+└── plan-migracion.md
 ```
 
-## Decisiones Técnicas Tomadas
-
-Todas las decisiones previamente marcadas como "pendiente de confirmar" se han resuelto:
+## Decisiones Técnicas
 
 | Decisión | Resolución |
 |---|---|
 | Cartografía | OpenStreetMap (libre, sin coste) |
+| Heatmaps | Leaflet.heat (densidad, incidencias, voluntarios) |
 | WCAG | 2.1 AA |
-| Navegadores | Chrome, Firefox, Safari, Edge (últimas 2 versiones) |
-| RPO/RTO | < 24h / < 4h |
-| Disponibilidad | 99,5% |
+| ENS | Categoría Media (MFA, rotación, incidentes) |
 | Credencial digital | Hash SHA-256 + QR verificable públicamente |
-| Firma electrónica | Hash de verificación (firma legal requiere proveedor certificado) |
-| Notificaciones | Interno + email SMTP (SMS preparado como webhook futuro) |
-| Retención datos operativos | 5 años (configurable por organización) |
-| Retención colaboradores | 3 años post-baja (configurable) |
-| Retención adoptantes | 5 años post-adopción (configurable) |
-| Retención auditoría | 5 años (configurable) |
-| Texto privacidad | Página `/privacidad` genérica adaptable |
-| Plantillas certificados | Configurables por organización |
-| Plantillas inspecciones | JSON schema, configurables |
-| Plan de migración | Documentado en `docs/plan-migracion.md` |
-| Reversibilidad | Endpoint `/api/export-full` + documentado |
-| Importación | Endpoint `/api/import` para CSV |
-| ENS | Categoría Básica (para aplicaciones municipales) |
+| Notificaciones | Interno + email SMTP + Web Push (VAPID) |
+| Offline | Service Worker + IndexedDB queue |
+| IA identificación | OpenAI Vision (sugiere, nunca confirma) |
+| Multi-moneda | EUR por defecto, 12 divisas soportadas |
+| Terminología | Perfiles por país (CER/TNR/TNVR) |
+| Plantillas regulatorias | ES (Ley 7/2023), PT (Lei 27/2016), IT (Legge 281/1991), FR (Code Rural) |
 
 ## Elementos que Requieren Proveedor Externo
 
 | Elemento | Nota |
 |---|---|
 | Firma electrónica cualificada | Requiere proveedor certificado (ej: Viafirma, Docusign) |
-| SMS/Push | Requiere proveedor (ej: Twilio, AWS SNS) — preparado como webhook |
+| SMS | Requiere proveedor (ej: Twilio) |
 | Hosting producción | Recomendado: Vercel/Railway/Fly.io (UE) |
 | Certificado HTTPS | Gestionado por hosting (Let's Encrypt) |
 | Auditoría externa ENS | Requiere empresa auditora certificada |
+| Stripe | Para suscripciones SaaS self-service (preparado, no integrado) |

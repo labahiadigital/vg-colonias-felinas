@@ -1,15 +1,110 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
+	import { authClient } from '$lib/auth-client.js';
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
 	let user = $derived(data.user);
 
+	let totpSetupUri = $state('');
+	let totpSecret = $state('');
+	let totpCode = $state('');
+	let totpError = $state('');
+	let totpSuccess = $state('');
+	let totpLoading = $state(false);
+	let showTotpSetup = $state(false);
+	let backupCodes = $state<string[]>([]);
+
+	async function enableTotp() {
+		totpLoading = true;
+		totpError = '';
+		try {
+			const res = await authClient.twoFactor.enable({ password: '' });
+			if (res.data) {
+				totpSetupUri = res.data.totpURI;
+				totpSecret = res.data.secret;
+				backupCodes = res.data.backupCodes ?? [];
+				showTotpSetup = true;
+			} else {
+				totpError = 'Error al generar TOTP';
+			}
+		} catch {
+			totpError = 'Error de conexión';
+		} finally {
+			totpLoading = false;
+		}
+	}
+
+	async function verifyTotp() {
+		totpLoading = true;
+		totpError = '';
+		try {
+			const res = await authClient.twoFactor.verifyTotp({ code: totpCode });
+			if (res.data) {
+				totpSuccess = t(locale, 'settings.2fa_enabled_success');
+				showTotpSetup = false;
+			} else {
+				totpError = t(locale, 'settings.2fa_invalid_code');
+			}
+		} catch {
+			totpError = 'Error de verificación';
+		} finally {
+			totpLoading = false;
+		}
+	}
+
+	async function disableTotp() {
+		if (!confirm(t(locale, 'settings.2fa_disable_confirm'))) return;
+		totpLoading = true;
+		try {
+			await authClient.twoFactor.disable({ password: '' });
+			totpSuccess = t(locale, 'settings.2fa_disabled_success');
+		} catch {
+			totpError = 'Error al desactivar';
+		} finally {
+			totpLoading = false;
+		}
+	}
+
 	let activeSection = $state('profile');
 	let isAdmin = $derived(data.isAdmin);
 	let importResult = $state('');
+	let permOverrides = $state<Map<string, boolean>>(new Map());
+
+	function hasPerm(roleId: number, permissionId: number): boolean {
+		const key = `${roleId}-${permissionId}`;
+		if (permOverrides.has(key)) return permOverrides.get(key)!;
+		return data.allRolePermissions.some(rp => rp.roleId === roleId && rp.permissionId === permissionId);
+	}
+
+	async function togglePermission(roleId: number, permissionId: number, currentlyHas: boolean) {
+		const key = `${roleId}-${permissionId}`;
+		permOverrides.set(key, !currentlyHas);
+		permOverrides = new Map(permOverrides);
+
+		const fd = new FormData();
+		fd.set('roleId', String(roleId));
+		fd.set('permissionId', String(permissionId));
+		fd.set('permAction', currentlyHas ? 'remove' : 'add');
+		try {
+			await fetch('?/togglePermission', {
+				method: 'POST',
+				body: fd,
+				headers: { 'x-sveltekit-action': 'true' }
+			});
+		} catch {
+			permOverrides.set(key, currentlyHas);
+			permOverrides = new Map(permOverrides);
+		}
+	}
+
+	$effect(() => {
+		if (data.allRolePermissions) {
+			permOverrides = new Map();
+		}
+	});
 
 	async function handleImport() {
 		const entity = (document.getElementById('importEntity') as HTMLSelectElement)?.value;
@@ -175,22 +270,118 @@
 			{/if}
 
 			{#if activeSection === 'security'}
-				<div class="bg-surface rounded-xl border border-border p-6">
-					<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.security')}</h3>
-					<div class="space-y-3">
-						<div class="p-4 bg-surface-sunken rounded-lg">
-							<h4 class="text-sm font-medium text-text mb-1">{t(locale, 'settings.change_password')}</h4>
-							<p class="text-xs text-text-muted mb-3">{t(locale, 'settings.change_password_desc')}</p>
-							<a href="/recuperar-contrasena" class="text-sm text-primary font-medium hover:text-primary-hover transition-colors">{t(locale, 'settings.recover_password')} &rarr;</a>
+				<div class="space-y-5">
+					<div class="bg-surface rounded-xl border border-border p-6">
+						<h3 class="text-base font-semibold text-text mb-4">{t(locale, 'settings.security')}</h3>
+						<div class="space-y-3">
+							<div class="p-4 bg-surface-sunken rounded-lg">
+								<h4 class="text-sm font-medium text-text mb-1">{t(locale, 'settings.change_password')}</h4>
+								<p class="text-xs text-text-muted mb-3">{t(locale, 'settings.change_password_desc')}</p>
+								<a href="/recuperar-contrasena" class="text-sm text-primary font-medium hover:text-primary-hover transition-colors">{t(locale, 'settings.recover_password')} &rarr;</a>
+							</div>
+							<div class="p-4 bg-surface-sunken rounded-lg">
+								<h4 class="text-sm font-medium text-text mb-1">{t(locale, 'settings.active_sessions')}</h4>
+								<p class="text-xs text-text-muted">{t(locale, 'settings.active_sessions_desc')}</p>
+							</div>
 						</div>
-						<div class="p-4 bg-surface-sunken rounded-lg">
-							<h4 class="text-sm font-medium text-text mb-1">{t(locale, 'settings.2fa')}</h4>
-							<p class="text-xs text-text-muted">{t(locale, 'settings.2fa_desc')}</p>
+					</div>
+
+					<div class="bg-surface rounded-xl border border-border p-6">
+						<div class="flex items-center gap-3 mb-4">
+							<div class="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5 text-accent"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+							</div>
+							<div>
+								<h3 class="text-base font-semibold text-text">{t(locale, 'settings.2fa')}</h3>
+								<p class="text-xs text-text-muted">{t(locale, 'settings.2fa_desc')}</p>
+							</div>
 						</div>
-						<div class="p-4 bg-surface-sunken rounded-lg">
-							<h4 class="text-sm font-medium text-text mb-1">{t(locale, 'settings.active_sessions')}</h4>
-							<p class="text-xs text-text-muted">{t(locale, 'settings.active_sessions_desc')}</p>
+
+						{#if totpError}
+							<div class="bg-danger-subtle text-danger text-sm p-3 rounded-lg mb-4 border border-danger/10">{totpError}</div>
+						{/if}
+						{#if totpSuccess}
+							<div class="bg-success-subtle text-success text-sm p-3 rounded-lg mb-4 border border-success/10">{totpSuccess}</div>
+						{/if}
+
+						{#if user?.twoFactorEnabled}
+							<div class="flex items-center gap-3 p-4 bg-success/5 rounded-lg border border-success/10 mb-4">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5 text-success flex-shrink-0"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+								<div>
+									<p class="text-sm font-medium text-success">{t(locale, 'settings.2fa_active')}</p>
+									<p class="text-xs text-text-muted mt-0.5">{t(locale, 'settings.2fa_active_desc')}</p>
+								</div>
+							</div>
+							<button onclick={disableTotp} disabled={totpLoading} class="px-4 py-2 bg-danger/10 text-danger text-sm font-medium rounded-lg hover:bg-danger/20 transition-colors">
+								{t(locale, 'settings.2fa_disable')}
+							</button>
+						{:else if showTotpSetup}
+							<div class="space-y-4">
+								<div class="p-4 bg-surface-sunken rounded-lg">
+									<p class="text-sm font-medium text-text mb-3">{t(locale, 'settings.2fa_scan_qr')}</p>
+									<div class="flex justify-center mb-4">
+										<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={encodeURIComponent(totpSetupUri)}" alt="QR TOTP" class="rounded-lg border border-border" width="200" height="200" />
+									</div>
+									<details class="text-xs text-text-muted">
+										<summary class="cursor-pointer hover:text-text transition-colors">{t(locale, 'settings.2fa_manual_key')}</summary>
+										<code class="block mt-2 p-2 bg-background rounded font-mono text-xs break-all select-all">{totpSecret}</code>
+									</details>
+								</div>
+
+								{#if backupCodes.length > 0}
+									<div class="p-4 bg-warning/5 rounded-lg border border-warning/10">
+										<p class="text-sm font-medium text-warning mb-2">{t(locale, 'settings.2fa_backup_codes')}</p>
+										<p class="text-xs text-text-muted mb-3">{t(locale, 'settings.2fa_backup_codes_desc')}</p>
+										<div class="grid grid-cols-2 gap-1.5">
+											{#each backupCodes as code}
+												<code class="px-2 py-1 bg-background rounded text-xs font-mono text-text text-center select-all">{code}</code>
+											{/each}
+										</div>
+									</div>
+								{/if}
+
+								<div>
+									<label for="totpCode" class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'settings.2fa_enter_code')}</label>
+									<div class="flex gap-3">
+										<input type="text" id="totpCode" bind:value={totpCode} maxlength="6" pattern="[0-9]{6}" placeholder="000000" class="w-32 px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-text text-center font-mono tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+										<button onclick={verifyTotp} disabled={totpLoading || totpCode.length !== 6} class="px-5 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50">
+											{t(locale, 'settings.2fa_verify')}
+										</button>
+									</div>
+								</div>
+							</div>
+						{:else}
+							<div class="p-4 bg-surface-sunken rounded-lg mb-4">
+								<p class="text-sm text-text-secondary">{t(locale, 'settings.2fa_recommend')}</p>
+							</div>
+							<button onclick={enableTotp} disabled={totpLoading} class="px-5 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50 inline-flex items-center gap-2">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+								{t(locale, 'settings.2fa_enable')}
+							</button>
+						{/if}
+					</div>
+
+					<div class="bg-surface rounded-xl border border-border p-6">
+						<h3 class="text-sm font-semibold text-text mb-3">{t(locale, 'settings.password_policy')}</h3>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+							<div class="flex justify-between p-3 bg-surface-sunken rounded-lg">
+								<span class="text-text-muted">{t(locale, 'settings.min_length')}</span>
+								<span class="font-medium text-text">12 {t(locale, 'settings.chars')}</span>
+							</div>
+							<div class="flex justify-between p-3 bg-surface-sunken rounded-lg">
+								<span class="text-text-muted">{t(locale, 'settings.rotation')}</span>
+								<span class="font-medium text-text">90 {t(locale, 'settings.days')}</span>
+							</div>
+							<div class="flex justify-between p-3 bg-surface-sunken rounded-lg">
+								<span class="text-text-muted">{t(locale, 'settings.max_attempts')}</span>
+								<span class="font-medium text-text">5</span>
+							</div>
+							<div class="flex justify-between p-3 bg-surface-sunken rounded-lg">
+								<span class="text-text-muted">{t(locale, 'settings.lockout_time')}</span>
+								<span class="font-medium text-text">30 min</span>
+							</div>
 						</div>
+						<p class="text-xs text-text-muted mt-3">{t(locale, 'settings.ens_media_compliance')}</p>
 					</div>
 				</div>
 			{/if}
@@ -292,20 +483,19 @@
 												<td class="px-3 py-2 font-medium capitalize text-text-secondary">{perm.module}</td>
 												<td class="px-3 py-2 text-text-secondary">{perm.action}</td>
 												{#each data.allRoles as role}
-													{@const has = data.allRolePermissions.some(rp => rp.roleId === role.id && rp.permissionId === perm.id)}
+													{@const has = hasPerm(role.id, perm.id)}
 													<td class="px-3 py-2 text-center">
-														<form method="POST" action="?/togglePermission" use:enhance>
-															<input type="hidden" name="roleId" value={role.id} />
-															<input type="hidden" name="permissionId" value={perm.id} />
-															<input type="hidden" name="action" value={has ? 'remove' : 'add'} />
-															<button type="submit" class="inline-flex w-6 h-6 items-center justify-center rounded-full transition-colors cursor-pointer {has ? 'bg-success/10 text-success hover:bg-danger/10 hover:text-danger' : 'bg-surface-sunken text-text-muted hover:bg-success/10 hover:text-success'}">
-																{#if has}
-																	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-3 h-3"><polyline points="20,6 9,17 4,12"/></svg>
-																{:else}
-																	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M18 6L6 18M6 6l12 12"/></svg>
-																{/if}
-															</button>
-														</form>
+														<button
+															type="button"
+															onclick={() => togglePermission(role.id, perm.id, has)}
+															class="inline-flex w-6 h-6 items-center justify-center rounded-full transition-colors cursor-pointer {has ? 'bg-success/10 text-success hover:bg-danger/10 hover:text-danger' : 'bg-surface-sunken text-text-muted hover:bg-success/10 hover:text-success'}"
+														>
+															{#if has}
+																<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-3 h-3"><polyline points="20,6 9,17 4,12"/></svg>
+															{:else}
+																<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+															{/if}
+														</button>
 													</td>
 												{/each}
 											</tr>
