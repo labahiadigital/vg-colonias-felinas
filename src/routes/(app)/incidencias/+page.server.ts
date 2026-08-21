@@ -1,21 +1,32 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { incidents, colonies, users, auditLogs } from '$lib/server/db/schema.js';
-import { eq, and, desc, ilike, sql } from 'drizzle-orm';
+import { incidents, colonies, users } from '$lib/server/db/schema.js';
+import { eq, and, desc, ilike } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
-import { logAudit } from '$lib/server/audit.js';
+import { requireAuthContext, getFormField, getFormNumber, requireField, requireFields } from '$lib/server/action-helpers.js';
+import { audit } from '$lib/server/audit.js';
 import { notify } from '$lib/server/notifications.js';
+import { orgScope, escapeLike, verifyOrgOwnership, buildWhere, loadOrgColonies, loadOrgUsers, loadRecentAudit } from '$lib/server/tenant.js';
+import { guardedUpdate, guardedDelete, guardedUpdateWith, guardedInsert } from '$lib/server/db-helpers.js';
+import { parsePagination, paginateWithCount } from '$lib/server/pagination.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
 	const statusFilter = url.searchParams.get('status') ?? '';
 	const priorityFilter = url.searchParams.get('priority') ?? '';
 	const categoryFilter = url.searchParams.get('category') ?? '';
 	const search = url.searchParams.get('q') ?? '';
+	const pagination = parsePagination(url);
 
-	const reporterAlias = sql`reporter`;
-	const assigneeAlias = sql`assignee`;
+	const whereClause = buildWhere(
+		orgScope(incidents.organizationId, orgId),
+		statusFilter && eq(incidents.status, statusFilter),
+		priorityFilter && eq(incidents.priority, priorityFilter),
+		categoryFilter && eq(incidents.category, categoryFilter),
+		search && ilike(incidents.description, `%${escapeLike(search)}%`)
+	);
 
-	let query = db.select({
+	const baseSelect = db.select({
 		id: incidents.id,
 		colonyId: incidents.colonyId,
 		catId: incidents.catId,
@@ -38,34 +49,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.orderBy(desc(incidents.createdAt))
 		.$dynamic();
 
-	const conditions = [];
-	if (statusFilter) conditions.push(eq(incidents.status, statusFilter));
-	if (priorityFilter) conditions.push(eq(incidents.priority, priorityFilter));
-	if (categoryFilter) conditions.push(eq(incidents.category, categoryFilter));
-	if (search) conditions.push(ilike(incidents.description, `%${search}%`));
-	if (conditions.length > 0) query = query.where(and(...conditions));
+	if (whereClause) baseSelect.where(whereClause);
 
-	const allIncidents = await query;
-	const allColonies = await db.select({ id: colonies.id, name: colonies.name }).from(colonies);
-	const allUsers = await db.select({ id: users.id, name: users.name }).from(users);
-
-	const incidentAudit = await db
-		.select({
-			entityId: auditLogs.entityId,
-			action: auditLogs.action,
-			details: auditLogs.details,
-			userName: users.name,
-			createdAt: auditLogs.createdAt
-		})
-		.from(auditLogs)
-		.leftJoin(users, eq(auditLogs.userId, users.id))
-		.where(eq(auditLogs.entity, 'incident'))
-		.orderBy(desc(auditLogs.createdAt))
-		.limit(50);
+	const [paginated, allColonies, allUsers, incidentAudit] = await Promise.all([
+		paginateWithCount(baseSelect, incidents, whereClause, pagination),
+		loadOrgColonies(orgId),
+		loadOrgUsers(orgId),
+		loadRecentAudit(orgId, { entity: 'incident', limit: 50 })
+	]);
 
 	return {
 		locale: locals.locale,
-		incidents: allIncidents,
+		...paginated,
 		colonies: allColonies,
 		users: allUsers,
 		incidentComments: incidentAudit,
@@ -75,108 +70,114 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
 
-		const category = fd.get('category') as string;
-		const priority = fd.get('priority') as string;
-		const colonyId = fd.get('colonyId') as string;
-		const description = fd.get('description') as string;
-		const latitude = parseFloat(fd.get('latitude') as string);
-		const longitude = parseFloat(fd.get('longitude') as string);
+		const { category, description } = requireFields(fd, {
+			category: 'La categoría', description: 'La descripción'
+		});
 
-		if (!category || !description) return fail(400, { error: 'Categoría y descripción son obligatorios' });
+		const priority = getFormField(fd, 'priority') || 'medium';
+		const colonyId = getFormField(fd, 'colonyId');
+		if (colonyId && !await verifyOrgOwnership(colonies, colonyId, ctx.organizationId)) {
+			return fail(404, { error: 'Colonia no encontrada' });
+		}
 
-		const result = await db.insert(incidents).values({
+		const latitude = getFormNumber(fd, 'latitude');
+		const longitude = getFormNumber(fd, 'longitude');
+
+		await guardedInsert(incidents, {
+			organizationId: ctx.organizationId,
 			category,
-			priority: priority || 'medium',
+			priority,
 			colonyId: colonyId || null,
 			description,
-			latitude: isNaN(latitude) ? null : latitude,
-			longitude: isNaN(longitude) ? null : longitude,
-			reportedBy: locals.user.id,
+			latitude,
+			longitude,
+			reportedBy: ctx.userId,
 			status: 'open'
-		}).returning();
+		}, ctx, 'incident', 'create', { category, priority });
 
-		if (result[0]) {
-			await logAudit({ userId: locals.user.id, entity: 'incident', entityId: result[0].id, action: 'create', details: { category, priority } });
-		}
 		return { success: true };
 	},
 
 	updateStatus: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const status = fd.get('status') as string;
-
-		await db.update(incidents).set({ status, updatedAt: new Date() }).where(eq(incidents.id, id));
-		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: id, action: 'change_status', details: { newStatus: status } });
+		const { id, status } = requireFields(fd, { id: 'El ID', status: 'El estado' });
 
 		const statusLabels: Record<string, string> = { open: 'Abierta', in_progress: 'En progreso', resolved: 'Resuelta', closed: 'Cerrada' };
-		await notify({ type: 'incident_status', title: 'Incidencia actualizada', message: `La incidencia ha cambiado a estado: ${statusLabels[status] || status}`, payload: { incidentId: id, status } });
+		await guardedUpdateWith(incidents, { status, updatedAt: new Date() },
+			and(eq(incidents.id, id), orgScope(incidents.organizationId, ctx.organizationId)),
+			{ id: incidents.id }, async () => {
+				await audit(ctx, 'incident', id, 'change_status', { newStatus: status });
+				await notify({ organizationId: ctx.organizationId, type: 'incident_status', title: 'Incidencia actualizada', message: `La incidencia ha cambiado a estado: ${statusLabels[status] || status}`, payload: { incidentId: id, status } });
+			});
 
 		return { updated: true };
 	},
 
 	assign: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const assignedTo = fd.get('assignedTo') as string;
+		const id = requireField(fd, 'id', 'El ID');
+		const assignedTo = getFormField(fd, 'assignedTo');
 
-		await db.update(incidents).set({ assignedTo: assignedTo || null, updatedAt: new Date() }).where(eq(incidents.id, id));
-
-		if (assignedTo) {
-			await notify({ userId: assignedTo, type: 'incident_assigned', title: 'Incidencia asignada', message: 'Se te ha asignado una nueva incidencia.', payload: { incidentId: id } });
-		}
-		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: id, action: 'assign', details: { assignedTo } });
+		await guardedUpdateWith(incidents, { assignedTo: assignedTo || null, updatedAt: new Date() },
+			and(eq(incidents.id, id), orgScope(incidents.organizationId, ctx.organizationId)),
+			{ id: incidents.id }, async () => {
+				if (assignedTo) {
+					await notify({ organizationId: ctx.organizationId, userId: assignedTo, type: 'incident_assigned', title: 'Incidencia asignada', message: 'Se te ha asignado una nueva incidencia.', payload: { incidentId: id } });
+				}
+				await audit(ctx, 'incident', id, 'assign', { assignedTo });
+			});
 		return { assigned: true };
 	},
 
 	addComment: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const incidentId = fd.get('incidentId') as string;
-		const comment = fd.get('comment') as string;
+		const { incidentId, comment } = requireFields(fd, {
+			incidentId: 'La incidencia', comment: 'El comentario'
+		});
 
-		if (!comment) return fail(400, { error: 'El comentario no puede estar vacío' });
+		if (!await verifyOrgOwnership(incidents, incidentId, ctx.organizationId)) {
+			return fail(404, { error: 'Incidencia no encontrada' });
+		}
 
-		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: incidentId, action: 'comment', details: { text: comment } });
+		await audit(ctx, 'incident', incidentId, 'comment', { text: comment });
 		return { commented: true };
 	},
 
 	edit: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const category = fd.get('category') as string;
-		const priority = fd.get('priority') as string;
-		const description = fd.get('description') as string;
-		const colonyId = fd.get('colonyId') as string;
+		const id = requireField(fd, 'id', 'El ID');
 
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const category = getFormField(fd, 'category');
+		const priority = getFormField(fd, 'priority');
+		const description = getFormField(fd, 'description');
+		const colonyId = getFormField(fd, 'colonyId');
 
-		await db.update(incidents).set({
-			...(category && { category }),
-			...(priority && { priority }),
-			...(description && { description }),
-			colonyId: colonyId || null,
-			updatedAt: new Date()
-		}).where(eq(incidents.id, id));
+		if (colonyId && !await verifyOrgOwnership(colonies, colonyId, ctx.organizationId)) {
+			return fail(404, { error: 'Colonia no encontrada' });
+		}
 
-		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: id, action: 'update', details: { category, priority } });
+		await guardedUpdate(incidents, {
+			...(category && { category }), ...(priority && { priority }),
+			...(description && { description }), colonyId: colonyId || null, updatedAt: new Date()
+		}, and(eq(incidents.id, id), orgScope(incidents.organizationId, ctx.organizationId)),
+			ctx, 'incident', id, 'update', { category, priority });
 		return { edited: true };
 	},
 
 	delete: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const id = requireField(fd, 'id', 'El ID');
 
-		await db.delete(incidents).where(eq(incidents.id, id));
-		await logAudit({ userId: locals.user.id, entity: 'incident', entityId: id, action: 'delete', details: {} });
+		await guardedDelete(incidents, and(eq(incidents.id, id), orgScope(incidents.organizationId, ctx.organizationId)),
+			ctx, 'incident', id, 'delete');
 		return { deleted: true };
 	}
 };

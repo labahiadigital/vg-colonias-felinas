@@ -45,14 +45,14 @@
 		searching = false;
 	}
 
-	let searchTimeout: ReturnType<typeof setTimeout>;
 	$effect(() => {
-		clearTimeout(searchTimeout);
+		let searchTimeout: ReturnType<typeof setTimeout> | undefined;
 		if (query.length >= 2) {
 			searchTimeout = setTimeout(() => searchData(query), 250);
 		} else {
 			searchResults = [];
 		}
+		return () => clearTimeout(searchTimeout);
 	});
 
 	const commands: Command[] = [
@@ -124,7 +124,7 @@
 			selectedIndex = Math.max(selectedIndex - 1, 0);
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
-			if (filteredCommands[selectedIndex]) execute(filteredCommands[selectedIndex]);
+			const cmd = filteredCommands[selectedIndex]; if (cmd) execute(cmd);
 		}
 	}
 

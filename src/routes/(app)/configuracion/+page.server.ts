@@ -1,75 +1,46 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { users, userRoles, roles, permissions, rolePermissions, catalogs, auditLogs, inspectionTemplates, certificateTemplates, emailTemplates, dataRetentionPolicies } from '$lib/server/db/schema.js';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { users, userRoles, roles, permissions, rolePermissions, catalogs, inspectionTemplates, certificateTemplates, emailTemplates, dataRetentionPolicies, organizationMembers } from '$lib/server/db/schema.js';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
-import { hasPermission } from '$lib/server/rbac.js';
-import { logAudit } from '$lib/server/audit.js';
+import { requireAuthContext, requirePermissionContext, getFormField, requireField, requireFields, requireInt } from '$lib/server/action-helpers.js';
+import { audit } from '$lib/server/audit.js';
+import { orgScope, loadRecentAudit } from '$lib/server/tenant.js';
+import { guardedUpdate, guardedDelete, guardedInsert } from '$lib/server/db-helpers.js';
+import { getUserRole, invalidateRbacCache } from '$lib/server/rbac.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) throw redirect(302, '/login');
+	const orgId = locals.organizationId;
+	if (!locals.user) redirect(302, '/login');
 
-	const roleRows = await db.select({ roleName: roles.name })
-		.from(userRoles)
-		.innerJoin(roles, eq(userRoles.roleId, roles.id))
-		.where(eq(userRoles.userId, locals.user.id));
-
-	const currentRole = roleRows[0]?.roleName ?? null;
+	const currentRole = await getUserRole(locals.user.id, orgId);
 	const isAdmin = currentRole === 'admin';
 
-	let allUsers: Array<{ id: string; name: string; email: string; createdAt: Date | null; roleName: string | null }> = [];
-	let allRoles: Array<{ id: number; name: string; description: string | null }> = [];
-	let allPermissions: Array<{ id: number; module: string; action: string }> = [];
-	let allRolePermissions: Array<{ roleId: number; permissionId: number }> = [];
-	let allCatalogs: Array<{ id: string; type: string; key: string; label: string; labelEu: string | null; labelCa: string | null; labelEn: string | null; sortOrder: number | null; isActive: boolean | null }> = [];
+	const orgUserIds = orgId
+		? db.select({ id: organizationMembers.userId }).from(organizationMembers).where(eq(organizationMembers.organizationId, orgId))
+		: null;
 
-	if (isAdmin) {
-		const usersWithRoles = await db
-			.select({
-				id: users.id,
-				name: users.name,
-				email: users.email,
-				createdAt: users.createdAt,
-				roleName: roles.name
-			})
-			.from(users)
-			.leftJoin(userRoles, eq(users.id, userRoles.userId))
-			.leftJoin(roles, eq(userRoles.roleId, roles.id))
-			.orderBy(asc(users.name));
-		allUsers = usersWithRoles;
+	const [allUsers, allRoles, allPermissions, allRolePermissions, allCatalogs, allInspectionTemplates, allCertificateTemplates, allEmailTemplates, allRetentionPolicies] = isAdmin
+		? await Promise.all([
+			orgUserIds
+				? db.select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt, roleName: roles.name })
+					.from(users).leftJoin(userRoles, eq(users.id, userRoles.userId)).leftJoin(roles, eq(userRoles.roleId, roles.id)).where(inArray(users.id, orgUserIds)).orderBy(asc(users.name))
+				: db.select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt, roleName: roles.name })
+					.from(users).leftJoin(userRoles, eq(users.id, userRoles.userId)).leftJoin(roles, eq(userRoles.roleId, roles.id)).orderBy(asc(users.name)),
+			db.select().from(roles).where(orgScope(roles.organizationId, orgId)).orderBy(asc(roles.name)),
+			db.select().from(permissions).orderBy(asc(permissions.module), asc(permissions.action)),
+			db.select().from(rolePermissions).where(
+				inArray(rolePermissions.roleId, db.select({ id: roles.id }).from(roles).where(orgScope(roles.organizationId, orgId)))
+			),
+			db.select().from(catalogs).where(orgScope(catalogs.organizationId, orgId)).orderBy(asc(catalogs.type), asc(catalogs.sortOrder)),
+			db.select().from(inspectionTemplates).where(orgScope(inspectionTemplates.organizationId, orgId)).orderBy(asc(inspectionTemplates.name)),
+			db.select().from(certificateTemplates).where(orgScope(certificateTemplates.organizationId, orgId)).orderBy(asc(certificateTemplates.type)),
+			db.select().from(emailTemplates).where(orgScope(emailTemplates.organizationId, orgId)).orderBy(asc(emailTemplates.key)),
+			db.select().from(dataRetentionPolicies).where(orgScope(dataRetentionPolicies.organizationId, orgId)).orderBy(asc(dataRetentionPolicies.entity))
+		])
+		: [[], [], [], [], [], [], [], [], []];
 
-		allRoles = await db.select().from(roles).orderBy(asc(roles.name));
-		allPermissions = await db.select().from(permissions).orderBy(asc(permissions.module), asc(permissions.action));
-		allRolePermissions = await db.select().from(rolePermissions);
-		allCatalogs = await db.select().from(catalogs).orderBy(asc(catalogs.type), asc(catalogs.sortOrder));
-	}
-
-	const allInspectionTemplates = isAdmin
-		? await db.select().from(inspectionTemplates).orderBy(asc(inspectionTemplates.name))
-		: [];
-	const allCertificateTemplates = isAdmin
-		? await db.select().from(certificateTemplates).orderBy(asc(certificateTemplates.type))
-		: [];
-	const allEmailTemplates = isAdmin
-		? await db.select().from(emailTemplates).orderBy(asc(emailTemplates.key))
-		: [];
-	const allRetentionPolicies = isAdmin
-		? await db.select().from(dataRetentionPolicies).orderBy(asc(dataRetentionPolicies.entity))
-		: [];
-
-	const recentAudit = await db
-		.select({
-			id: auditLogs.id,
-			entity: auditLogs.entity,
-			action: auditLogs.action,
-			details: auditLogs.details,
-			createdAt: auditLogs.createdAt,
-			userName: users.name
-		})
-		.from(auditLogs)
-		.leftJoin(users, eq(auditLogs.userId, users.id))
-		.orderBy(desc(auditLogs.createdAt))
-		.limit(20);
+	const recentAudit = await loadRecentAudit(orgId, { limit: 20 });
 
 	return {
 		locale: locals.locale,
@@ -91,212 +62,183 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	updateProfile: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const name = fd.get('name') as string;
-		const language = fd.get('language') as string;
+		const name = requireField(fd, 'name', 'El nombre');
+		const language = getFormField(fd, 'language');
 
-		if (!name) return fail(400, { error: 'El nombre es obligatorio' });
-
-		await db.update(users).set({
-			name,
-			language: language || 'es',
-			updatedAt: new Date()
-		}).where(eq(users.id, locals.user.id));
-
-		await logAudit({ userId: locals.user.id, entity: 'user', entityId: locals.user.id, action: 'update_profile' });
+		await guardedUpdate(users, { name, language: language || 'es', updatedAt: new Date() },
+			eq(users.id, ctx.userId), ctx, 'user', ctx.userId, 'update_profile');
 		return { success: true };
 	},
 
 	assignRole: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const userId = fd.get('userId') as string;
-		const roleId = Number(fd.get('roleId'));
+		const userId = requireField(fd, 'userId', 'El usuario');
+		const roleId = requireInt(fd, 'roleId', 'El rol');
 
-		if (!userId || !roleId) return fail(400, { error: 'Datos incompletos' });
+		const [ownedRole] = await db.select({ id: roles.id }).from(roles)
+			.where(and(eq(roles.id, roleId), orgScope(roles.organizationId, ctx.organizationId)))
+			.limit(1);
+		if (!ownedRole) return fail(403, { error: 'Rol no pertenece a la organización' });
 
-		await db.delete(userRoles).where(eq(userRoles.userId, userId));
-		await db.insert(userRoles).values({ userId, roleId });
+		await db.transaction(async (tx) => {
+			await tx.delete(userRoles).where(and(eq(userRoles.userId, userId), orgScope(userRoles.organizationId, ctx.organizationId)));
+			await tx.insert(userRoles).values({ userId, roleId, organizationId: ctx.organizationId });
+		});
+		invalidateRbacCache(userId);
 
-		await logAudit({ userId: locals.user.id, entity: 'user_role', entityId: userId, action: 'assign_role', details: { roleId } });
+		await audit(ctx, 'user_role', userId, 'assign_role', { roleId });
 		return { roleSuccess: true };
 	},
 
 	createRole: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const name = fd.get('name') as string;
-		const description = fd.get('description') as string;
+		const name = requireField(fd, 'name', 'El nombre del rol');
+		const description = getFormField(fd, 'description');
 
-		if (!name) return fail(400, { error: 'Nombre de rol obligatorio' });
+		await guardedInsert(roles, { name: name.toLowerCase(), description: description || null, organizationId: ctx.organizationId }, ctx, 'role', 'create', { name });
 
-		await db.insert(roles).values({ name: name.toLowerCase(), description: description || null });
-		await logAudit({ userId: locals.user.id, entity: 'role', entityId: name, action: 'create' });
 		return { roleCreated: true };
 	},
 
 	togglePermission: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const roleId = Number(fd.get('roleId'));
-		const permissionId = Number(fd.get('permissionId'));
-		const permAction = fd.get('permAction') as string;
+		const roleId = requireInt(fd, 'roleId', 'El rol');
+		const permissionId = requireInt(fd, 'permissionId', 'El permiso');
+		const permAction = getFormField(fd, 'permAction');
 
-		if (permAction === 'add') {
-			const existing = await db.select().from(rolePermissions)
-				.where(and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.permissionId, permissionId)))
-				.limit(1);
-			if (existing.length === 0) {
-				await db.insert(rolePermissions).values({ roleId, permissionId });
+		const [ownedRole] = await db.select({ id: roles.id }).from(roles)
+			.where(and(eq(roles.id, roleId), orgScope(roles.organizationId, ctx.organizationId)))
+			.limit(1);
+		if (!ownedRole) return fail(403, { error: 'Rol no pertenece a la organización' });
+
+		await db.transaction(async (tx) => {
+			if (permAction === 'add') {
+				const existing = await tx.select().from(rolePermissions)
+					.where(and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.permissionId, permissionId)))
+					.limit(1);
+				if (existing.length === 0) {
+					await tx.insert(rolePermissions).values({ roleId, permissionId });
+				}
+			} else {
+				await tx.delete(rolePermissions)
+					.where(and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.permissionId, permissionId)));
 			}
-		} else {
-			await db.delete(rolePermissions)
-				.where(and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.permissionId, permissionId)));
-		}
+		});
 
+		invalidateRbacCache();
+
+		await audit(ctx, 'role_permission', String(roleId), 'toggle', { permissionId, permAction });
 		return { permUpdated: true };
 	},
 
 	createCatalog: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const type = fd.get('type') as string;
-		const key = fd.get('key') as string;
-		const label = fd.get('label') as string;
-		const labelEu = fd.get('labelEu') as string;
-		const labelCa = fd.get('labelCa') as string;
-		const labelEn = fd.get('labelEn') as string;
+		const { type, key, label } = requireFields(fd, {
+			type: 'El tipo', key: 'La clave', label: 'La etiqueta'
+		});
+		const labelEu = getFormField(fd, 'labelEu');
+		const labelCa = getFormField(fd, 'labelCa');
+		const labelEn = getFormField(fd, 'labelEn');
 
-		if (!type || !key || !label) return fail(400, { error: 'Tipo, clave y etiqueta son obligatorios' });
-
-		await db.insert(catalogs).values({
-			type,
-			key,
-			label,
+		await guardedInsert(catalogs, {
+			organizationId: ctx.organizationId,
+			type, key, label,
 			labelEu: labelEu || null,
 			labelCa: labelCa || null,
 			labelEn: labelEn || null
-		});
+		}, ctx, 'catalog', 'create', { type, label });
 
-		await logAudit({ userId: locals.user.id, entity: 'catalog', entityId: key, action: 'create', details: { type, label } });
 		return { catalogCreated: true };
 	},
 
 	editCatalog: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const label = fd.get('label') as string;
-		const labelEu = fd.get('labelEu') as string;
-		const labelCa = fd.get('labelCa') as string;
-		const labelEn = fd.get('labelEn') as string;
+		const id = requireField(fd, 'id', 'El ID');
 
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const label = getFormField(fd, 'label');
+		const labelEu = getFormField(fd, 'labelEu');
+		const labelCa = getFormField(fd, 'labelCa');
+		const labelEn = getFormField(fd, 'labelEn');
 
-		await db.update(catalogs).set({
-			...(label && { label }),
-			labelEu: labelEu || null,
-			labelCa: labelCa || null,
-			labelEn: labelEn || null
-		}).where(eq(catalogs.id, id));
-
-		await logAudit({ userId: locals.user.id, entity: 'catalog', entityId: id, action: 'update', details: { label } });
+		await guardedUpdate(catalogs, {
+			...(label && { label }), labelEu: labelEu || null, labelCa: labelCa || null, labelEn: labelEn || null
+		}, and(eq(catalogs.id, id), orgScope(catalogs.organizationId, ctx.organizationId)),
+			ctx, 'catalog', id, 'update', { label });
 		return { catalogEdited: true };
 	},
 
 	deleteCatalog: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const id = requireField(fd, 'id', 'El ID');
 
-		await db.delete(catalogs).where(eq(catalogs.id, id));
-		await logAudit({ userId: locals.user.id, entity: 'catalog', entityId: id, action: 'delete', details: {} });
+		await guardedDelete(catalogs, and(eq(catalogs.id, id), orgScope(catalogs.organizationId, ctx.organizationId)),
+			ctx, 'catalog', id, 'delete');
 		return { catalogDeleted: true };
 	},
 
 	createInspectionTemplate: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const name = fd.get('name') as string;
-		const description = fd.get('description') as string;
-		const schemaStr = fd.get('schema') as string;
-
-		if (!name || !schemaStr) return fail(400, { error: 'Nombre y esquema son obligatorios' });
+		const { name, schema: schemaStr } = requireFields(fd, {
+			name: 'El nombre', schema: 'El esquema'
+		});
+		const description = getFormField(fd, 'description');
 
 		let schema;
 		try { schema = JSON.parse(schemaStr); } catch { return fail(400, { error: 'JSON de esquema no válido' }); }
 
-		await db.insert(inspectionTemplates).values({ name, description: description || null, schema });
-		await logAudit({ userId: locals.user.id, entity: 'inspection_template', entityId: name, action: 'create' });
+		await guardedInsert(inspectionTemplates, { organizationId: ctx.organizationId, name, description: description || null, schema }, ctx, 'inspection_template', 'create', { name });
+
 		return { templateCreated: true };
 	},
 
 	createCertificateTemplate: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const type = fd.get('type') as string;
-		const name = fd.get('name') as string;
-		const headerHtml = fd.get('headerHtml') as string;
-		const footerHtml = fd.get('footerHtml') as string;
-
-		if (!type || !name) return fail(400, { error: 'Tipo y nombre son obligatorios' });
-
-		await db.insert(certificateTemplates).values({
-			type, name, headerHtml: headerHtml || null, footerHtml: footerHtml || null
+		const { type, name } = requireFields(fd, {
+			type: 'El tipo', name: 'El nombre'
 		});
-		await logAudit({ userId: locals.user.id, entity: 'certificate_template', entityId: name, action: 'create' });
+		const headerHtml = getFormField(fd, 'headerHtml');
+		const footerHtml = getFormField(fd, 'footerHtml');
+
+		await guardedInsert(certificateTemplates, {
+			organizationId: ctx.organizationId, type, name, headerHtml: headerHtml || null, footerHtml: footerHtml || null
+		}, ctx, 'certificate_template', 'create', { type, name });
+
 		return { certTemplateCreated: true };
 	},
 
 	createEmailTemplate: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const key = fd.get('key') as string;
-		const subject = fd.get('subject') as string;
-		const bodyHtml = fd.get('bodyHtml') as string;
+		const { key, subject, bodyHtml } = requireFields(fd, {
+			key: 'La clave', subject: 'El asunto', bodyHtml: 'El contenido'
+		});
 
-		if (!key || !subject || !bodyHtml) return fail(400, { error: 'Clave, asunto y contenido son obligatorios' });
+		await guardedInsert(emailTemplates, { organizationId: ctx.organizationId, key, subject, bodyHtml }, ctx, 'email_template', 'create', { key, subject });
 
-		await db.insert(emailTemplates).values({ key, subject, bodyHtml });
-		await logAudit({ userId: locals.user.id, entity: 'email_template', entityId: key, action: 'create' });
 		return { emailTemplateCreated: true };
 	},
 
 	saveRetentionPolicy: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
-		if (!(await hasPermission(locals.user.id, 'admin', '*'))) return fail(403, { error: 'Sin permisos' });
-
+		const ctx = await requirePermissionContext(locals, 'admin', '*', request);
 		const fd = await request.formData();
-		const entity = fd.get('entity') as string;
-		const retentionDays = Number(fd.get('retentionDays'));
-		const action = fd.get('retentionAction') as string;
+		const entity = requireField(fd, 'entity', 'La entidad');
+		const retentionDays = requireInt(fd, 'retentionDays', 'Los días de retención');
+		const action = getFormField(fd, 'retentionAction');
 
-		if (!entity || !retentionDays) return fail(400, { error: 'Datos incompletos' });
+		await guardedInsert(dataRetentionPolicies, {
+			organizationId: ctx.organizationId, entity, retentionDays, action: action || 'anonymize'
+		}, ctx, 'retention_policy', 'create', { entity, retentionDays, retentionAction: action });
 
-		await db.insert(dataRetentionPolicies).values({
-			entity, retentionDays, action: action || 'anonymize'
-		});
-		await logAudit({ userId: locals.user.id, entity: 'retention_policy', entityId: entity, action: 'create', details: { retentionDays, retentionAction: action } });
 		return { retentionSaved: true };
 	}
 };

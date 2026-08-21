@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { t, getLocale, locales, localeNames } from '../../src/lib/i18n/index.js';
+import { t, getLocale, locales, localeNames, translateEntity, translateAction } from '../../src/lib/i18n/index.js';
 
 describe('getLocale', () => {
 	it('returns "es" when no cookie', () => {
@@ -95,5 +95,40 @@ describe('localeNames', () => {
 
 	it('English is named English', () => {
 		expect(localeNames.en).toBe('English');
+	});
+});
+
+describe('translateEntity', () => {
+	it('translates a known entity key', () => {
+		const result = translateEntity('es', 'colony');
+		expect(result).not.toBe('colony');
+		expect(result.length).toBeGreaterThan(0);
+	});
+
+	it('returns raw entity for unknown key', () => {
+		expect(translateEntity('es', 'nonexistent_xyz')).toBe('nonexistent_xyz');
+	});
+
+	it('lowercases entity before looking up', () => {
+		const lower = translateEntity('es', 'colony');
+		const upper = translateEntity('es', 'Colony');
+		expect(lower).toBe(upper);
+	});
+});
+
+describe('translateAction', () => {
+	it('translates a known action key', () => {
+		const result = translateAction('es', 'create');
+		expect(result).toBe('Creación');
+	});
+
+	it('returns raw action for unknown key', () => {
+		expect(translateAction('es', 'unknown_action_xyz')).toBe('unknown_action_xyz');
+	});
+
+	it('lowercases action before looking up', () => {
+		const lower = translateAction('es', 'create');
+		const upper = translateAction('es', 'Create');
+		expect(lower).toBe(upper);
 	});
 });

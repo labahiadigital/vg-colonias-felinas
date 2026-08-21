@@ -1,13 +1,18 @@
 import { db } from './db/index.js';
 import { organizations, emailTemplates } from './db/schema.js';
 import { eq, and } from 'drizzle-orm';
+import { createTransport, type Transporter } from 'nodemailer';
+import { escHtml } from './html.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('email');
 
 interface SendEmailOptions {
 	to: string;
 	subject: string;
 	html: string;
 	text?: string;
-	organizationId?: string;
+	organizationId?: string | null;
 }
 
 interface SmtpConfig {
@@ -18,7 +23,7 @@ interface SmtpConfig {
 	from: string;
 }
 
-async function getSmtpConfig(organizationId?: string): Promise<SmtpConfig | null> {
+async function getSmtpConfig(organizationId?: string | null): Promise<SmtpConfig | null> {
 	if (!organizationId) return getDefaultSmtp();
 
 	const [org] = await db
@@ -45,7 +50,7 @@ async function getSmtpConfig(organizationId?: string): Promise<SmtpConfig | null
 	return getDefaultSmtp();
 }
 
-function getDefaultSmtp(): SmtpConfig | null {
+export function getDefaultSmtp(): SmtpConfig | null {
 	const host = process.env.SMTP_HOST;
 	const user = process.env.SMTP_USER;
 	const pass = process.env.SMTP_PASS;
@@ -53,43 +58,52 @@ function getDefaultSmtp(): SmtpConfig | null {
 
 	return {
 		host,
-		port: parseInt(process.env.SMTP_PORT || '587'),
+		port: parseInt(process.env.SMTP_PORT || '587', 10),
 		user,
 		pass,
 		from: process.env.SMTP_FROM || user
 	};
 }
 
+const transporterCache = new Map<string, Transporter>();
+
+function getOrCreateTransport(smtp: SmtpConfig): Transporter {
+	const cacheKey = `${smtp.host}:${smtp.port}:${smtp.user}`;
+	let transport = transporterCache.get(cacheKey);
+	if (!transport) {
+		transport = createTransport({
+			host: smtp.host,
+			port: smtp.port,
+			secure: smtp.port === 465,
+			auth: {
+				user: smtp.user,
+				pass: smtp.pass
+			}
+		});
+		transporterCache.set(cacheKey, transport);
+	}
+	return transport;
+}
+
 export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
 	const smtp = await getSmtpConfig(opts.organizationId);
 	if (!smtp) {
-		console.warn('[email] SMTP no configurado, email no enviado:', opts.subject);
+		log.warn('SMTP no configurado, email no enviado', { subject: opts.subject });
 		return false;
 	}
 
 	try {
-		const response = await fetch(`https://${smtp.host}`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'Authorization': `Basic ${btoa(`${smtp.user}:${smtp.pass}`)}`
-			},
-			body: JSON.stringify({
-				from: smtp.from,
-				to: opts.to,
-				subject: opts.subject,
-				html: opts.html,
-				text: opts.text
-			})
+		const transport = getOrCreateTransport(smtp);
+		await transport.sendMail({
+			from: smtp.from,
+			to: opts.to,
+			subject: opts.subject,
+			html: opts.html,
+			text: opts.text
 		});
-
-		if (!response.ok) {
-			console.error('[email] Error enviando email:', response.status);
-			return false;
-		}
 		return true;
 	} catch (error) {
-		console.error('[email] Error de conexión SMTP:', error);
+		log.error('Error enviando email', { to: opts.to, subject: opts.subject, error: String(error) });
 		return false;
 	}
 }
@@ -112,20 +126,32 @@ export async function sendTemplateEmail(
 		.limit(1);
 
 	if (!template) {
-		console.warn(`[email] Template '${templateKey}' no encontrada`);
+		log.warn('Template no encontrada', { templateKey, locale });
 		return false;
 	}
 
+	const { subject, html, text } = replaceTemplateVariables(
+		{ subject: template.subject, bodyHtml: template.bodyHtml, bodyText: template.bodyText || '' },
+		variables
+	);
+
+	return sendEmail({ to, subject, html, text, organizationId });
+}
+
+export function replaceTemplateVariables(
+	template: { subject: string; bodyHtml: string; bodyText: string },
+	variables: Record<string, string>
+): { subject: string; html: string; text: string } {
 	let subject = template.subject;
 	let html = template.bodyHtml;
-	let text = template.bodyText || '';
+	let text = template.bodyText;
 
 	for (const [key, value] of Object.entries(variables)) {
 		const placeholder = `{{${key}}}`;
 		subject = subject.replaceAll(placeholder, value);
-		html = html.replaceAll(placeholder, value);
+		html = html.replaceAll(placeholder, escHtml(value));
 		text = text.replaceAll(placeholder, value);
 	}
 
-	return sendEmail({ to, subject, html, text, organizationId });
+	return { subject, html, text };
 }

@@ -46,7 +46,8 @@ export function toggleWidget(widgets: WidgetConfig[], widgetId: string): WidgetC
 
 export function reorderWidgets(widgets: WidgetConfig[], fromIndex: number, toIndex: number): WidgetConfig[] {
 	const arr = [...widgets];
-	const [removed] = arr.splice(fromIndex, 1);
+	const removed = arr.splice(fromIndex, 1)[0];
+	if (!removed) return arr;
 	arr.splice(toIndex, 0, removed);
 	const updated = arr.map((w, i) => ({ ...w, order: i }));
 	saveWidgetConfig(updated);

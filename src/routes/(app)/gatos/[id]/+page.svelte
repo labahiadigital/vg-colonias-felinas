@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.js';
+	import { toRecord } from '$lib/index.js';
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
-	import type { PageData, ActionData } from './$types.js';
+	import type { PageData } from './$types.js';
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
+	let { data }: { data: PageData } = $props();
 	let locale = $derived(data.locale);
 	let cat = $derived(data.cat);
 
@@ -282,9 +282,9 @@
 											<span class="text-xs text-text-muted">{new Date(adoption.adoptedAt).toLocaleDateString(locale)}</span>
 										{/if}
 									</div>
-									{#if adoption.adopterInfo && typeof adoption.adopterInfo === 'object'}
-										{@const info = adoption.adopterInfo as Record<string, string>}
-										<p class="text-sm text-text-secondary mt-1">{t(locale, 'adoptions.adopter_name')}: {info.name ?? '-'}</p>
+							{#if adoption.adopterInfo && typeof adoption.adopterInfo === 'object'}
+								{@const info = toRecord(adoption.adopterInfo)}
+									<p class="text-sm text-text-secondary mt-1">{t(locale, 'adoptions.adopter_name')}: {typeof info.name === 'string' ? info.name : '-'}</p>
 									{/if}
 								</div>
 							{/each}

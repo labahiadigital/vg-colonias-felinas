@@ -2,6 +2,9 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { auth } from '$lib/server/auth/index.js';
+import { createLogger } from '$lib/server/logger.js';
+
+const log = createLogger('seed');
 import {
 	colonies,
 	cats,
@@ -20,9 +23,13 @@ import {
 } from '$lib/server/db/schema.js';
 
 export const POST: RequestHandler = async ({ url }) => {
+	if (process.env.NODE_ENV === 'production') {
+		return json({ error: 'Seed endpoint disabled in production' }, { status: 403 });
+	}
+
 	const secret = url.searchParams.get('key');
 	if (secret !== 'seed-2026-vg') {
-		return json({ error: 'Unauthorized' }, { status: 401 });
+		return json({ error: 'No autorizado' }, { status: 401 });
 	}
 
 	try {
@@ -46,36 +53,34 @@ export const POST: RequestHandler = async ({ url }) => {
 		await db.insert(permissions).values(permValues).onConflictDoNothing();
 		const allPerms = await db.select().from(permissions);
 
-		const getPermId = (mod: string, act: string) => allPerms.find(p => p.module === mod && p.action === act)?.id;
-
 		// ─── 3. Assign full permissions to admin ─────────────────────
-		const adminRoleId = roleMap.get('admin')!;
+		const adminRoleId = roleMap.get('admin');
+		const tecnicoRoleId = roleMap.get('tecnico');
+		const vetRoleId = roleMap.get('veterinario');
+		const gestorRoleId = roleMap.get('entidad_gestora');
+		const colabRoleId = roleMap.get('colaborador');
+
+		if (!adminRoleId || !tecnicoRoleId || !vetRoleId || !gestorRoleId || !colabRoleId) {
+			return json({ error: 'Failed to resolve role IDs' }, { status: 500 });
+		}
+
 		const rpValues = allPerms.map(p => ({ roleId: adminRoleId, permissionId: p.id }));
 		await db.insert(rolePermissions).values(rpValues).onConflictDoNothing();
 
-		// Técnico: view + create + edit on most modules, no admin
-		const tecnicoRoleId = roleMap.get('tecnico')!;
 		const tecnicoPerms = allPerms.filter(p =>
 			p.module !== 'admin' && ['view', 'create', 'edit', 'validate', 'close', 'export', 'access_personal_data', 'access_health_data', 'access_geo_sensitive'].includes(p.action)
 		);
 		await db.insert(rolePermissions).values(tecnicoPerms.map(p => ({ roleId: tecnicoRoleId, permissionId: p.id }))).onConflictDoNothing();
 
-		// Veterinario: salud, gatos, cer
-		const vetRoleId = roleMap.get('veterinario')!;
 		const vetPerms = allPerms.filter(p =>
 			['salud', 'gatos', 'cer'].includes(p.module) && ['view', 'create', 'edit', 'access_health_data'].includes(p.action)
 		);
 		await db.insert(rolePermissions).values(vetPerms.map(p => ({ roleId: vetRoleId, permissionId: p.id }))).onConflictDoNothing();
 
-		// Entidad gestora: similar a técnico sin admin ni datos sensibles
-		const gestorRoleId = roleMap.get('entidad_gestora')!;
 		const gestorPerms = allPerms.filter(p =>
 			p.module !== 'admin' && ['view', 'create', 'edit', 'export'].includes(p.action)
 		);
 		await db.insert(rolePermissions).values(gestorPerms.map(p => ({ roleId: gestorRoleId, permissionId: p.id }))).onConflictDoNothing();
-
-		// Colaborador: solo view en colonias asignadas, create incidencias
-		const colabRoleId = roleMap.get('colaborador')!;
 		const colabPerms = allPerms.filter(p =>
 			(p.module === 'colonias' && p.action === 'view') ||
 			(p.module === 'gatos' && p.action === 'view') ||
@@ -252,7 +257,7 @@ export const POST: RequestHandler = async ({ url }) => {
 			}
 		});
 	} catch (error) {
-		console.error('Seed error:', error);
+		log.error('Seed failed', { error: String(error) });
 		return json({ error: 'Seed failed', details: String(error) }, { status: 500 });
 	}
 };

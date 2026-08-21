@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
-	import type { PageData, ActionData } from './$types.js';
+	import type { PageData } from './$types.js';
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
+	let { data }: { data: PageData } = $props();
 	let locale = $derived(data.locale);
 	let col = $derived(data.collaborator);
 

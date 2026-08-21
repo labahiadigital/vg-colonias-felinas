@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { t } from '$lib/i18n/index.js';
 	import type { PageData } from './$types.js';
+	import { createMap, addHeatLayer, addDrawControl } from '$lib/leaflet-adapter.js';
+	import type { Map as LeafletMap, LayerGroup } from 'leaflet';
 
 	let { data }: { data: PageData } = $props();
 	let locale = $derived(data.locale);
@@ -11,8 +13,8 @@
 	let heatmapData = $derived(data.heatmapData);
 
 	let mapContainer: HTMLDivElement;
-	let map: any;
-	let layerGroups: Record<string, any> = {};
+	let map: LeafletMap | null = null;
+	let layerGroups: Record<string, LayerGroup> = {};
 	let mapReady = $state(false);
 	let showLayers = $state(false);
 
@@ -33,7 +35,8 @@
 	let geolocating = $state(false);
 
 	$effect(() => {
-		if (!map) return;
+		const m = map;
+		if (!m) return;
 		void layersVisible.colonies;
 		void layersVisible.feedingPoints;
 		void layersVisible.incidents;
@@ -45,17 +48,18 @@
 		void layersVisible.heatVolunteer;
 		Object.entries(layerGroups).forEach(([key, group]) => {
 			const k = key as keyof typeof layersVisible;
-			if (layersVisible[k]) { if (!map.hasLayer(group)) group.addTo(map); }
-			else { if (map.hasLayer(group)) map.removeLayer(group); }
+			if (layersVisible[k]) { if (!m.hasLayer(group)) group.addTo(m); }
+			else { if (m.hasLayer(group)) m.removeLayer(group); }
 		});
 	});
 
 	function geolocate() {
-		if (!map || !navigator.geolocation) return;
+		const m = map;
+		if (!m || !navigator.geolocation) return;
 		geolocating = true;
 		navigator.geolocation.getCurrentPosition(
 			(pos) => {
-				map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+				m.setView([pos.coords.latitude, pos.coords.longitude], 16);
 				geolocating = false;
 			},
 			() => { geolocating = false; },
@@ -63,10 +67,10 @@
 		);
 	}
 
-	let districts = $derived([...new Set(coloniesData.map((c: any) => c.district).filter(Boolean))]);
+	let districts = $derived([...new Set(coloniesData.map((c) => c.district).filter(Boolean))]);
 
 	let filteredColonies = $derived(
-		coloniesData.filter((c: any) => {
+		coloniesData.filter((c) => {
 			if (statusFilter !== 'all' && c.status !== statusFilter) return false;
 			if (districtFilter !== 'all' && c.district !== districtFilter) return false;
 			if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -75,12 +79,9 @@
 	);
 
 	onMount(async () => {
-		const L = await import('leaflet');
-
-		map = L.map(mapContainer).setView([42.8467, -2.6716], 13);
-		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-			attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-		}).addTo(map);
+		const result = await createMap(mapContainer);
+		const L = result.L;
+		map = result.map;
 
 		const mkIcon = (color: string, size: number) => L.divIcon({
 			className: '',
@@ -96,10 +97,10 @@
 		const sensitiveGroup = L.layerGroup();
 		const campingGroup = L.layerGroup();
 
-		coloniesData.forEach((colony: any) => {
+		coloniesData.forEach((colony) => {
 			if (!colony.latitude || !colony.longitude) return;
 			const color = colony.status === 'monitoring' ? '#f59e0b' : colony.status === 'inactive' ? '#9ca3af' : '#0f766e';
-			const marker = L.marker([colony.latitude, colony.longitude], { icon: mkIcon(color, 24) })
+			const m = L.marker([colony.latitude, colony.longitude], { icon: mkIcon(color, 24) })
 				.bindPopup(`
 					<div style="min-width:220px;font-family:Inter,system-ui,sans-serif">
 						<strong style="font-size:14px">${colony.name}</strong><br>
@@ -111,23 +112,23 @@
 						</div>
 					</div>
 				`);
-			marker.addTo(colonyGroup);
+			m.addTo(colonyGroup);
 
 			if (colony.geojson) {
 				try {
-					L.geoJSON(colony.geojson, { style: { color: '#0f766e', weight: 2, fillOpacity: 0.1 } }).addTo(campingGroup);
+					L.geoJSON(colony.geojson as GeoJSON.GeoJsonObject, { style: { color: '#0f766e', weight: 2, fillOpacity: 0.1 } }).addTo(campingGroup);
 				} catch (_) { /* skip */ }
 			}
 		});
 
-		feedingPointsData.forEach((fp: any) => {
+		feedingPointsData.forEach((fp) => {
 			if (!fp.latitude || !fp.longitude) return;
 			L.marker([fp.latitude, fp.longitude], { icon: mkIcon('#10b981', 14) })
 				.bindPopup(`<strong>${t(locale, 'map.feeding_point')}</strong><br><small>${fp.notes ?? ''}</small>`)
 				.addTo(fpGroup);
 		});
 
-		incidentsData.forEach((inc: any) => {
+		incidentsData.forEach((inc) => {
 			if (!inc.latitude || !inc.longitude) return;
 			L.marker([inc.latitude, inc.longitude], { icon: mkIcon('#ef4444', 20) })
 				.bindPopup(`
@@ -156,25 +157,13 @@
 				.addTo(sensitiveGroup);
 		});
 
-		let heatCatGroup: any = L.layerGroup();
-		let heatIncGroup: any = L.layerGroup();
-		let heatVolGroup: any = L.layerGroup();
+		const heatCatGroup = L.layerGroup();
+		const heatIncGroup = L.layerGroup();
+		const heatVolGroup = L.layerGroup();
 
-		try {
-			await import('leaflet.heat');
-			if (heatmapData.catDensity.length > 0) {
-				const catHeat = (L as any).heatLayer(heatmapData.catDensity, { radius: 35, blur: 25, maxZoom: 17, gradient: { 0.2: '#eff6ff', 0.4: '#93c5fd', 0.6: '#3b82f6', 0.8: '#1d4ed8', 1: '#1e3a5f' } });
-				catHeat.addTo(heatCatGroup);
-			}
-			if (heatmapData.incidentFrequency.length > 0) {
-				const incHeat = (L as any).heatLayer(heatmapData.incidentFrequency, { radius: 30, blur: 20, maxZoom: 17, gradient: { 0.2: '#fef3c7', 0.4: '#fbbf24', 0.6: '#f59e0b', 0.8: '#dc2626', 1: '#991b1b' } });
-				incHeat.addTo(heatIncGroup);
-			}
-			if (heatmapData.volunteerActivity.length > 0) {
-				const volHeat = (L as any).heatLayer(heatmapData.volunteerActivity, { radius: 30, blur: 20, maxZoom: 17, gradient: { 0.2: '#ecfdf5', 0.4: '#6ee7b7', 0.6: '#10b981', 0.8: '#059669', 1: '#064e3b' } });
-				volHeat.addTo(heatVolGroup);
-			}
-		} catch (_) { /* leaflet.heat not available */ }
+		await addHeatLayer(L, heatCatGroup, heatmapData.catDensity, { radius: 35, blur: 25, maxZoom: 17, gradient: { 0.2: '#eff6ff', 0.4: '#93c5fd', 0.6: '#3b82f6', 0.8: '#1d4ed8', 1: '#1e3a5f' } });
+		await addHeatLayer(L, heatIncGroup, heatmapData.incidentFrequency, { radius: 30, blur: 20, maxZoom: 17, gradient: { 0.2: '#fef3c7', 0.4: '#fbbf24', 0.6: '#f59e0b', 0.8: '#dc2626', 1: '#991b1b' } });
+		await addHeatLayer(L, heatVolGroup, heatmapData.volunteerActivity, { radius: 30, blur: 20, maxZoom: 17, gradient: { 0.2: '#ecfdf5', 0.4: '#6ee7b7', 0.6: '#10b981', 0.8: '#059669', 1: '#064e3b' } });
 
 		layerGroups = {
 			colonies: colonyGroup,
@@ -192,32 +181,10 @@
 		fpGroup.addTo(map);
 		incGroup.addTo(map);
 
-		try {
-			await import('leaflet-draw');
-			const drawnItems = new L.FeatureGroup();
-			map.addLayer(drawnItems);
-
-			const drawControl = new (L as any).Control.Draw({
-				position: 'topright',
-				draw: {
-					polygon: { shapeOptions: { color: '#0f766e', weight: 2, fillOpacity: 0.15 } },
-					polyline: { shapeOptions: { color: '#0f766e', weight: 3 } },
-					marker: true,
-					circle: { shapeOptions: { color: '#f59e0b', weight: 2, fillOpacity: 0.1 } },
-					rectangle: false,
-					circlemarker: false
-				},
-				edit: { featureGroup: drawnItems }
-			});
-			map.addControl(drawControl);
-
-			map.on((L as any).Draw.Event.CREATED, (e: any) => {
-				drawnItems.addLayer(e.layer);
-			});
-		} catch (_) { /* leaflet-draw not available */ }
+		await addDrawControl(L, map);
 
 		mapReady = true;
-		setTimeout(() => map.invalidateSize(), 100);
+		setTimeout(() => map?.invalidateSize(), 100);
 	});
 </script>
 

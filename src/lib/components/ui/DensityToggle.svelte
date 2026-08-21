@@ -9,12 +9,14 @@
 		onchange?: (density: 'compact' | 'comfortable' | 'spacious') => void;
 	} = $props();
 
-	if (browser && !onchange) {
-		const stored = localStorage.getItem('gatopolis-density');
-		if (stored === 'compact' || stored === 'comfortable' || stored === 'spacious') {
-			value = stored;
+	$effect(() => {
+		if (browser && !onchange) {
+			const stored = localStorage.getItem('gatopolis-density');
+			if (stored === 'compact' || stored === 'comfortable' || stored === 'spacious') {
+				value = stored;
+			}
 		}
-	}
+	});
 
 	function set(density: 'compact' | 'comfortable' | 'spacious') {
 		value = density;

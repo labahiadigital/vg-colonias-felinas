@@ -37,7 +37,7 @@
 			{/if}
 		</div>
 		<span class="text-[11px] text-text-muted hidden sm:inline">
-			{users.length === 1 ? `${users[0].name} está aquí` : `${users.length} personas aquí`}
+			{users.length === 1 ? `${users[0]?.name ?? ''} está aquí` : `${users.length} personas aquí`}
 		</span>
 	</div>
 

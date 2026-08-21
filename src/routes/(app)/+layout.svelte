@@ -3,9 +3,10 @@
 	import { t } from '$lib/i18n/index.js';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import Header from '$lib/components/layout/Header.svelte';
+	import type { Snippet } from 'svelte';
 	import type { LayoutData } from './$types.js';
 
-	let { data, children }: { data: LayoutData; children: any } = $props();
+	let { data, children }: { data: LayoutData; children: Snippet } = $props();
 	let sidebarOpen = $state(false);
 	let locale = $derived(data.locale);
 

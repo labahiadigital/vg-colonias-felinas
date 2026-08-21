@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { t } from '$lib/i18n/index.js';
+	import { t, translateEntity, translateAction } from '$lib/i18n/index.js';
+	import { computeRate, toRecord } from '$lib/index.js';
 	import type { PageData } from './$types.js';
 	import MiniChart from '$lib/components/ui/MiniChart.svelte';
 	import OnboardingChecklist from '$lib/components/ui/OnboardingChecklist.svelte';
@@ -70,7 +71,7 @@
 	const complianceScore = $derived(() => {
 		const all = complianceChecks.flatMap(c => c.items);
 		const passed = all.filter(i => i.ok).length;
-		return { passed, total: all.length, pct: all.length > 0 ? Math.round((passed / all.length) * 100) : 0 };
+		return { passed, total: all.length, pct: computeRate(passed, all.length) };
 	});
 
 	const sparkColonies = $derived([3, 5, 4, 7, 8, 6, 9, 10, 8, 12, stats.activeColonies]);
@@ -104,33 +105,26 @@
 		return colors[entity] ?? 'text-text-secondary bg-surface-sunken';
 	}
 
-	function translateAction(action: string): string {
-		const key = `activity.action.${action.toLowerCase()}`;
-		const translated = t(locale, key);
-		return translated !== key ? translated : action;
-	}
+	
 
-	function translateEntity(entity: string): string {
-		const key = `activity.entity.${entity.toLowerCase()}`;
-		const translated = t(locale, key);
-		return translated !== key ? translated : entity;
-	}
+	
 
 	function formatDetails(details: unknown, entity: string): string {
-		if (!details || typeof details !== 'object') return translateEntity(entity);
-		const d = details as Record<string, unknown>;
+		const d = toRecord(details);
+		if (Object.keys(d).length === 0) return translateEntity(locale, entity);
 		if (d.name) return String(d.name);
 		if (d.category) return String(d.category);
-		if (d.type && d.format) return `${translateEntity(entity)} (${String(d.format).toUpperCase()})`;
+		if (d.type && d.format) return `${translateEntity(locale, entity)} (${String(d.format).toUpperCase()})`;
 		if (d.type) return String(d.type);
 		if (d.status) return String(d.status);
 		if (d.label) return String(d.label);
-		return translateEntity(entity);
+		return translateEntity(locale, entity);
 	}
 
-	function timeAgo(dateStr: string | null): string {
-		if (!dateStr) return '';
-		const diff = Date.now() - new Date(dateStr).getTime();
+	function timeAgo(dateInput: string | Date | null): string {
+		if (!dateInput) return '';
+		const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+		const diff = Date.now() - date.getTime();
 		const mins = Math.floor(diff / 60000);
 		if (mins < 1) return t(locale, 'time.just_now');
 		if (mins < 60) return `${mins}m`;
@@ -301,7 +295,7 @@
 							</div>
 							<div class="flex-1 min-w-0">
 								<p class="text-sm text-text">
-									<span class="font-medium">{translateAction(log.action)}</span>
+									<span class="font-medium">{translateAction(locale, log.action)}</span>
 									<span class="text-text-secondary"> — {formatDetails(log.details, log.entity)}</span>
 								</p>
 								<div class="flex items-center gap-2 mt-0.5">
@@ -309,7 +303,7 @@
 										<span class="text-xs text-text-muted">{log.userName}</span>
 										<span class="text-xs text-text-muted">·</span>
 									{/if}
-									<span class="text-xs text-text-muted">{timeAgo(log.createdAt as unknown as string)}</span>
+									<span class="text-xs text-text-muted">{timeAgo(log.createdAt)}</span>
 								</div>
 							</div>
 						</div>

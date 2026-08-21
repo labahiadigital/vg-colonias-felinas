@@ -2,6 +2,7 @@
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types.js';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
@@ -32,16 +33,13 @@
 		return map[s] ?? { dot: 'bg-text-muted', bg: 'bg-surface-sunken text-text-muted' };
 	}
 
-	function intervTypeLabel(type: string): string {
-		return t(locale, `providers.intervention_type.${type}`) || type;
-	}
 </script>
 
 <div class="max-w-7xl mx-auto">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
 			<h1 class="text-2xl font-bold text-text tracking-tight">{t(locale, 'providers.title')}</h1>
-			<p class="text-sm text-text-muted mt-0.5">{data.providers.length} {t(locale, 'providers.registered')}</p>
+			<p class="text-sm text-text-muted mt-0.5">{data.totalItems} {t(locale, 'providers.registered')}</p>
 		</div>
 		<button onclick={() => showNewForm = !showNewForm}
 			class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors shadow-sm">
@@ -125,7 +123,7 @@
 	{/if}
 
 	<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-		{#each data.providers as prov}
+		{#each data.items as prov}
 			{@const badge = statusConfig(prov.status)}
 			<div class="bg-surface rounded-xl border border-border p-5 interactive-card">
 				<div class="flex items-start justify-between mb-3">
@@ -177,22 +175,22 @@
 					<form method="POST" action="?/edit" use:enhance class="mt-3 space-y-2 p-3 bg-surface-sunken rounded-lg">
 						<input type="hidden" name="id" value={prov.id} />
 						<div class="grid grid-cols-2 gap-2">
-							<div>
-								<label class="text-[10px] text-text-muted uppercase">{t(locale, 'providers.name')}</label>
+							<label class="block">
+								<span class="text-[10px] text-text-muted uppercase">{t(locale, 'providers.name')}</span>
 								<input type="text" name="name" value={prov.name} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-							</div>
-							<div>
-								<label class="text-[10px] text-text-muted uppercase">{t(locale, 'providers.contact')}</label>
+							</label>
+							<label class="block">
+								<span class="text-[10px] text-text-muted uppercase">{t(locale, 'providers.contact')}</span>
 								<input type="text" name="contactPerson" value={prov.contactPerson ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-							</div>
-							<div>
-								<label class="text-[10px] text-text-muted uppercase">{t(locale, 'providers.phone')}</label>
+							</label>
+							<label class="block">
+								<span class="text-[10px] text-text-muted uppercase">{t(locale, 'providers.phone')}</span>
 								<input type="text" name="phone" value={prov.phone ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-							</div>
-							<div>
-								<label class="text-[10px] text-text-muted uppercase">{t(locale, 'providers.email')}</label>
+							</label>
+							<label class="block">
+								<span class="text-[10px] text-text-muted uppercase">{t(locale, 'providers.email')}</span>
 								<input type="text" name="email" value={prov.email ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-							</div>
+							</label>
 						</div>
 						<div class="flex gap-2">
 							<button type="submit" class="px-4 py-2 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover transition-colors min-h-[36px]">{t(locale, 'common.save')}</button>
@@ -205,8 +203,8 @@
 					<form method="POST" action="?/addIntervention" use:enhance class="mt-3 space-y-3 p-3 bg-surface-sunken rounded-lg">
 						<input type="hidden" name="providerId" value={prov.id} />
 						<div class="grid grid-cols-2 gap-2">
-							<div>
-								<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'common.type')}</label>
+							<label class="block">
+								<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'common.type')}</span>
 								<select name="interventionType" required class="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary/20">
 									<option value="sterilization">{t(locale, 'providers.intervention_type.sterilization')}</option>
 									<option value="vaccination">{t(locale, 'providers.intervention_type.vaccination')}</option>
@@ -215,29 +213,29 @@
 									<option value="checkup">{t(locale, 'providers.intervention_type.checkup')}</option>
 									<option value="other">{t(locale, 'providers.intervention_type.other')}</option>
 								</select>
-							</div>
-							<div>
-								<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'providers.cost')} (€)</label>
+							</label>
+							<label class="block">
+								<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'providers.cost')} (€)</span>
 								<input type="number" name="cost" step="0.01" min="0" class="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" />
-							</div>
-							<div>
-								<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'health.cat')}</label>
+							</label>
+							<label class="block">
+								<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'health.cat')}</span>
 								<select name="catId" class="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary/20">
 									<option value="">--</option>
 									{#each data.cats as cat}
 										<option value={cat.id}>{cat.name || t(locale, 'common.unnamed')}</option>
 									{/each}
 								</select>
-							</div>
-							<div>
-								<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'common.date')}</label>
+							</label>
+							<label class="block">
+								<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'common.date')}</span>
 								<input type="date" name="performedAt" class="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" />
-							</div>
+							</label>
 						</div>
-						<div>
-							<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'providers.invoice')}</label>
+						<label class="block">
+							<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'providers.invoice')}</span>
 							<input type="text" name="invoiceRef" class="w-full px-2 py-1.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" />
-						</div>
+						</label>
 						<button type="submit" class="w-full px-3 py-2 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover transition-colors min-h-[36px]">{t(locale, 'providers.save_intervention')}</button>
 					</form>
 				{/if}
@@ -252,4 +250,6 @@
 			</div>
 		{/each}
 	</div>
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

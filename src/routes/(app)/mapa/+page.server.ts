@@ -1,9 +1,17 @@
 import type { PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { colonies, feedingPoints, incidents, cats, visits } from '$lib/server/db/schema.js';
-import { eq, sql } from 'drizzle-orm';
+import { colonies, feedingPoints, incidents, visits } from '$lib/server/db/schema.js';
+import { sql, ne, inArray } from 'drizzle-orm';
+import { orgScope, buildWhere } from '$lib/server/tenant.js';
+import { buildHeatmapData } from '$lib/server/heatmap.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
+	const orgId = locals.organizationId;
+
+	const orgColoniesSubquery = orgId
+		? db.select({ id: colonies.id }).from(colonies).where(orgScope(colonies.organizationId, orgId))
+		: undefined;
+
 	const [allColonies, allFeedingPoints, openIncidents, allIncidentsForHeat, visitsByColony] = await Promise.all([
 		db.select({
 			id: colonies.id,
@@ -13,9 +21,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 			district: colonies.district,
 			latitude: colonies.latitude,
 			longitude: colonies.longitude,
+			geojson: colonies.geojson,
 			catCount: sql<number>`(SELECT count(*) FROM cats WHERE cats.colony_id = ${colonies.id})`
-		}).from(colonies),
-		db.select().from(feedingPoints),
+		}).from(colonies).where(orgScope(colonies.organizationId, orgId)),
+		db.select().from(feedingPoints).where(
+			orgColoniesSubquery
+				? inArray(feedingPoints.colonyId, orgColoniesSubquery)
+				: undefined
+		),
 		db.select({
 			id: incidents.id,
 			category: incidents.category,
@@ -25,37 +38,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 			latitude: incidents.latitude,
 			longitude: incidents.longitude
 		}).from(incidents).where(
-			sql`${incidents.status} != 'resolved'`
+			buildWhere(
+				orgScope(incidents.organizationId, orgId),
+				ne(incidents.status, 'resolved')
+			)
 		),
 		db.select({
 			latitude: incidents.latitude,
 			longitude: incidents.longitude,
 			priority: incidents.priority
-		}).from(incidents),
+		}).from(incidents).where(orgScope(incidents.organizationId, orgId)),
 		db.select({
 			colonyId: visits.colonyId,
 			visitCount: sql<number>`count(*)`
-		}).from(visits).groupBy(visits.colonyId)
+		}).from(visits).where(orgScope(visits.organizationId, orgId)).groupBy(visits.colonyId)
 	]);
-
-	const visitCountMap = new Map(visitsByColony.map(v => [v.colonyId, Number(v.visitCount)]));
 
 	return {
 		locale: locals.locale,
 		colonies: allColonies,
 		feedingPoints: allFeedingPoints,
 		incidents: openIncidents,
-		heatmapData: {
-			catDensity: allColonies
-				.filter((c): c is typeof c & { latitude: number; longitude: number } => c.latitude != null && c.longitude != null)
-				.map(c => [c.latitude, c.longitude, Number(c.catCount) || 1]),
-			incidentFrequency: allIncidentsForHeat
-				.filter((i): i is typeof i & { latitude: number; longitude: number } => i.latitude != null && i.longitude != null)
-				.map(i => [i.latitude, i.longitude, i.priority === 'critical' ? 3 : i.priority === 'high' ? 2 : 1]),
-			volunteerActivity: allColonies
-				.filter((c): c is typeof c & { latitude: number; longitude: number } => c.latitude != null && c.longitude != null)
-				.map(c => [c.latitude, c.longitude, visitCountMap.get(c.id) ?? 0])
-				.filter(v => (v[2] as number) > 0)
-		}
+		heatmapData: buildHeatmapData(allColonies, allIncidentsForHeat, visitsByColony)
 	};
 };

@@ -37,7 +37,7 @@ const statusConfig: Record<string, { dot: string; bg: string }> = {
 };
 
 function getStatusStyle(status: string): { dot: string; bg: string } {
-	return statusConfig[status] ?? statusConfig.default;
+	return statusConfig[status] ?? statusConfig['default'] ?? { dot: 'bg-primary', bg: 'bg-primary/8 text-primary' };
 }
 
 describe('Autocomplete: filterOptions', () => {
@@ -56,13 +56,13 @@ describe('Autocomplete: filterOptions', () => {
 	it('filters by label', () => {
 		const result = filterOptions(options, 'Luna');
 		expect(result).toHaveLength(1);
-		expect(result[0].label).toBe('Gato Luna');
+		expect(result[0]!.label).toBe('Gato Luna');
 	});
 
 	it('filters by subtitle', () => {
 		const result = filterOptions(options, 'Macho');
 		expect(result).toHaveLength(1);
-		expect(result[0].label).toBe('Gato Sol');
+		expect(result[0]!.label).toBe('Gato Sol');
 	});
 
 	it('is case-insensitive', () => {
@@ -145,5 +145,69 @@ describe('StatusBadge: getStatusStyle', () => {
 	it('returns muted style', () => {
 		const style = getStatusStyle('muted');
 		expect(style.dot).toBe('bg-text-muted');
+	});
+});
+
+// --- toNotificationType (from +layout.server.ts) ---
+
+const VALID_NOTIFICATION_TYPES = new Set(['info', 'warning', 'success', 'danger'] as const);
+type NotificationType = 'info' | 'warning' | 'success' | 'danger';
+function toNotificationType(value: unknown): NotificationType {
+	return typeof value === 'string' && VALID_NOTIFICATION_TYPES.has(value as NotificationType)
+		? (value as NotificationType)
+		: 'info';
+}
+
+describe('toNotificationType', () => {
+	it('returns valid notification type as-is', () => {
+		expect(toNotificationType('info')).toBe('info');
+		expect(toNotificationType('warning')).toBe('warning');
+		expect(toNotificationType('success')).toBe('success');
+		expect(toNotificationType('danger')).toBe('danger');
+	});
+
+	it('returns "info" for unknown string', () => {
+		expect(toNotificationType('error')).toBe('info');
+		expect(toNotificationType('critical')).toBe('info');
+		expect(toNotificationType('')).toBe('info');
+	});
+
+	it('returns "info" for null/undefined', () => {
+		expect(toNotificationType(null)).toBe('info');
+		expect(toNotificationType(undefined)).toBe('info');
+	});
+
+	it('returns "info" for non-string values', () => {
+		expect(toNotificationType(42)).toBe('info');
+		expect(toNotificationType(true)).toBe('info');
+		expect(toNotificationType({})).toBe('info');
+	});
+});
+
+// --- itemId (from DataTable.svelte) ---
+
+function itemId(item: Record<string, unknown>): string {
+	return typeof item.id === 'string' ? item.id : String(item.id ?? '');
+}
+
+describe('DataTable itemId', () => {
+	it('returns string id as-is', () => {
+		expect(itemId({ id: 'abc-123' })).toBe('abc-123');
+	});
+
+	it('converts numeric id to string', () => {
+		expect(itemId({ id: 42 })).toBe('42');
+	});
+
+	it('returns empty string for missing id', () => {
+		expect(itemId({})).toBe('');
+	});
+
+	it('returns empty string for null id', () => {
+		expect(itemId({ id: null })).toBe('');
+	});
+
+	it('returns empty string for undefined id', () => {
+		expect(itemId({ id: undefined })).toBe('');
 	});
 });

@@ -1,36 +1,39 @@
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { cats, colonies, healthRecords, cerActions, auditLogs } from '$lib/server/db/schema.js';
-import { eq, desc } from 'drizzle-orm';
+import { cats, colonies, healthRecords, cerActions } from '$lib/server/db/schema.js';
+import { eq, and, desc } from 'drizzle-orm';
+import { orgScope } from '$lib/server/tenant.js';
+import { requireApiContext } from '$lib/server/action-helpers.js';
+import { audit } from '$lib/server/audit.js';
+import { escHtml, htmlDocHeaders } from '$lib/server/html.js';
+import { rateLimitGuard } from '$lib/server/rate-limit.js';
 
-export const GET: RequestHandler = async ({ params, locals, url }) => {
-	if (!locals.user) return new Response('No autenticado', { status: 401 });
-
+export const GET: RequestHandler = async ({ params, locals, url, request }) => {
+	const ctx = requireApiContext(locals, request);
+	const blocked = rateLimitGuard('export', ctx.userId, request);
+	if (blocked) return blocked;
 	const type = url.searchParams.get('type') || 'health';
 	const catId = params.catId;
+	const orgId = ctx.organizationId;
 
-	const [cat] = await db.select().from(cats).where(eq(cats.id, catId));
+	const [cat] = await db.select().from(cats).where(and(eq(cats.id, catId), orgScope(cats.organizationId, orgId)));
 	if (!cat) return new Response('Gato no encontrado', { status: 404 });
 
 	let colonyName = '';
 	if (cat.colonyId) {
-		const [colony] = await db.select({ name: colonies.name }).from(colonies).where(eq(colonies.id, cat.colonyId));
+		const [colony] = await db.select({ name: colonies.name }).from(colonies).where(and(eq(colonies.id, cat.colonyId), orgScope(colonies.organizationId, orgId)));
 		colonyName = colony?.name || '';
 	}
 
-	const healthRecs = await db.select().from(healthRecords).where(eq(healthRecords.catId, catId)).orderBy(desc(healthRecords.performedAt));
-	const cerRecs = await db.select().from(cerActions).where(eq(cerActions.catId, catId)).orderBy(desc(cerActions.capturedAt));
+	const [healthRecs, cerRecs] = await Promise.all([
+		db.select().from(healthRecords).where(and(eq(healthRecords.catId, catId), orgScope(healthRecords.organizationId, orgId))).orderBy(desc(healthRecords.performedAt)),
+		db.select().from(cerActions).where(and(eq(cerActions.catId, catId), orgScope(cerActions.organizationId, orgId))).orderBy(desc(cerActions.capturedAt))
+	]);
 
 	const now = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
 	const certNumber = `CERT-${catId.slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
 
-	await db.insert(auditLogs).values({
-		userId: locals.user.id,
-		entity: 'certificate',
-		entityId: catId,
-		action: 'generate',
-		details: { type, certNumber }
-	});
+	await audit(ctx, 'certificate', catId, 'generate', { type, certNumber });
 
 	let title = 'Certificado Sanitario';
 	if (type === 'sterilization') title = 'Certificado de Esterilización';
@@ -40,11 +43,13 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const dewormings = healthRecs.filter(r => r.type === 'deworming');
 	const sterilizationRecord = healthRecs.find(r => r.type === 'sterilization');
 
+	const e = escHtml;
+
 	const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>${title}</title>
+<title>${e(title)}</title>
 <style>
 	@page { size: A4; margin: 2cm; }
 	body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; max-width: 700px; margin: 0 auto; padding: 20px; }
@@ -73,21 +78,21 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	<p style="font-size:14px;font-weight:bold;color:#005a4d">AYUNTAMIENTO DE VITORIA-GASTEIZ</p>
 	<p>Departamento de Medio Ambiente y Espacio Público</p>
 	<p>Gatopolis — Colonias Felinas Urbanas</p>
-	<h1>${title}</h1>
-	<p class="cert-number">N.º ${certNumber}</p>
+	<h1>${e(title)}</h1>
+	<p class="cert-number">N.º ${e(certNumber)}</p>
 	<p>Expediente: 2026/CO_ASUM/0013</p>
 </div>
 
 <div class="section">
 	<h2>Datos del Animal</h2>
 	<table>
-		<tr><td>Nombre/Identificador</td><td>${cat.name || 'Sin nombre'}</td></tr>
-		<tr><td>Colonia</td><td>${colonyName || 'No asignada'}</td></tr>
+		<tr><td>Nombre/Identificador</td><td>${e(cat.name) || 'Sin nombre'}</td></tr>
+		<tr><td>Colonia</td><td>${e(colonyName) || 'No asignada'}</td></tr>
 		<tr><td>Sexo</td><td>${cat.sex === 'male' ? 'Macho' : cat.sex === 'female' ? 'Hembra' : 'Desconocido'}</td></tr>
-		<tr><td>Edad estimada</td><td>${cat.estimatedAge || 'No determinada'}</td></tr>
-		<tr><td>Microchip</td><td>${cat.microchip || 'No identificado'}</td></tr>
+		<tr><td>Edad estimada</td><td>${e(cat.estimatedAge) || 'No determinada'}</td></tr>
+		<tr><td>Microchip</td><td>${e(cat.microchip) || 'No identificado'}</td></tr>
 		<tr><td>Esterilizado/a</td><td>${cat.sterilized ? 'Sí' : 'No'}${sterilizationRecord?.performedAt ? ' (' + new Date(sterilizationRecord.performedAt).toLocaleDateString('es-ES') + ')' : ''}</td></tr>
-		<tr><td>Estado actual</td><td>${cat.status === 'in_colony' ? 'En colonia' : cat.status === 'adopted' ? 'Adoptado/a' : cat.status === 'deceased' ? 'Fallecido/a' : cat.status}</td></tr>
+		<tr><td>Estado actual</td><td>${cat.status === 'in_colony' ? 'En colonia' : cat.status === 'adopted' ? 'Adoptado/a' : cat.status === 'deceased' ? 'Fallecido/a' : e(cat.status)}</td></tr>
 	</table>
 </div>
 
@@ -98,7 +103,7 @@ ${type === 'health' || type === 'sterilization' ? `
 	<table class="records-table">
 		<thead><tr><th>Fecha</th><th>Veterinario</th><th>Clínica</th><th>Observaciones</th></tr></thead>
 		<tbody>
-		${vaccinations.map(v => `<tr><td>${v.performedAt ? new Date(v.performedAt).toLocaleDateString('es-ES') : '-'}</td><td>${v.vetName || '-'}</td><td>${v.vetClinic || '-'}</td><td>${v.notes || '-'}</td></tr>`).join('')}
+		${vaccinations.map(v => `<tr><td>${v.performedAt ? new Date(v.performedAt).toLocaleDateString('es-ES') : '-'}</td><td>${e(v.vetName) || '-'}</td><td>${e(v.vetClinic) || '-'}</td><td>${e(v.notes) || '-'}</td></tr>`).join('')}
 		</tbody>
 	</table>` : '<p style="color:#999;font-size:12px">Sin registros de vacunación.</p>'}
 </div>
@@ -109,7 +114,7 @@ ${type === 'health' || type === 'sterilization' ? `
 	<table class="records-table">
 		<thead><tr><th>Fecha</th><th>Veterinario</th><th>Clínica</th><th>Observaciones</th></tr></thead>
 		<tbody>
-		${dewormings.map(d => `<tr><td>${d.performedAt ? new Date(d.performedAt).toLocaleDateString('es-ES') : '-'}</td><td>${d.vetName || '-'}</td><td>${d.vetClinic || '-'}</td><td>${d.notes || '-'}</td></tr>`).join('')}
+		${dewormings.map(d => `<tr><td>${d.performedAt ? new Date(d.performedAt).toLocaleDateString('es-ES') : '-'}</td><td>${e(d.vetName) || '-'}</td><td>${e(d.vetClinic) || '-'}</td><td>${e(d.notes) || '-'}</td></tr>`).join('')}
 		</tbody>
 	</table>` : '<p style="color:#999;font-size:12px">Sin registros de desparasitación.</p>'}
 </div>
@@ -122,7 +127,7 @@ ${type === 'cer' ? `
 	<table class="records-table">
 		<thead><tr><th>Captura</th><th>Esterilización</th><th>Retorno</th><th>Colaborador</th><th>Notas</th></tr></thead>
 		<tbody>
-		${cerRecs.map(c => `<tr><td>${c.capturedAt ? new Date(c.capturedAt).toLocaleDateString('es-ES') : '-'}</td><td>${c.sterilizedAt ? new Date(c.sterilizedAt).toLocaleDateString('es-ES') : '-'}</td><td>${c.returnedAt ? new Date(c.returnedAt).toLocaleDateString('es-ES') : '-'}</td><td>${c.collaboratorName || '-'}</td><td>${c.notes || '-'}</td></tr>`).join('')}
+		${cerRecs.map(c => `<tr><td>${c.capturedAt ? new Date(c.capturedAt).toLocaleDateString('es-ES') : '-'}</td><td>${c.sterilizedAt ? new Date(c.sterilizedAt).toLocaleDateString('es-ES') : '-'}</td><td>${c.returnedAt ? new Date(c.returnedAt).toLocaleDateString('es-ES') : '-'}</td><td>${e(c.collaboratorName) || '-'}</td><td>${e(c.notes) || '-'}</td></tr>`).join('')}
 		</tbody>
 	</table>` : '<p style="color:#999;font-size:12px">Sin actuaciones CER registradas.</p>'}
 </div>
@@ -146,9 +151,6 @@ ${type === 'cer' ? `
 </html>`;
 
 	return new Response(html, {
-		headers: {
-			'Content-Type': 'text/html; charset=utf-8',
-			'Content-Disposition': `inline; filename="${title.replace(/ /g, '_')}_${cat.name || catId.slice(0, 8)}.html"`
-		}
+		headers: htmlDocHeaders(`${title.replace(/ /g, '_')}_${cat.name || catId.slice(0, 8)}.html`)
 	});
 };

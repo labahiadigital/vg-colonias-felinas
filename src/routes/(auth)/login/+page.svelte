@@ -20,12 +20,12 @@
 		try {
 			const result = await authClient.signIn.email({ email, password });
 			if (result.error) {
-				error = result.error.message ?? 'Error de autenticación';
+				error = result.error.message ?? t(locale, 'auth.auth_error');
 			} else {
 				await goto('/dashboard');
 			}
 		} catch {
-			error = 'Error de conexión. Inténtelo de nuevo.';
+			error = t(locale, 'auth.connection_error');
 		} finally {
 			loading = false;
 		}
@@ -127,15 +127,15 @@
 
 		<div class="text-center mt-6">
 			<p class="text-sm text-text-muted">
-				¿Nueva organización?
-				<a href="/registro" class="text-primary hover:text-primary-hover font-medium transition-colors">Registrarse</a>
+				{t(locale, 'auth.new_org')}
+				<a href="/registro" class="text-primary hover:text-primary-hover font-medium transition-colors">{t(locale, 'auth.register')}</a>
 			</p>
 		</div>
 
 		<div class="flex justify-center gap-3 mt-8 text-xs text-text-muted">
-			<a href="/privacidad" class="hover:text-text-secondary transition-colors">Privacidad</a>
+			<a href="/privacidad" class="hover:text-text-secondary transition-colors">{t(locale, 'auth.privacy')}</a>
 			<span>·</span>
-			<a href="/terminos" class="hover:text-text-secondary transition-colors">Términos</a>
+			<a href="/terminos" class="hover:text-text-secondary transition-colors">{t(locale, 'auth.terms')}</a>
 		</div>
 	</div>
 </div>

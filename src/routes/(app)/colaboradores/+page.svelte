@@ -6,6 +6,8 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
 
+	import Pagination from '$lib/components/ui/Pagination.svelte';
+
 	let showNewForm = $state(false);
 
 	function statusConfig(s: string) {
@@ -24,7 +26,7 @@
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
 			<h1 class="text-2xl font-bold text-text tracking-tight">{t(locale, 'collaborators.title')}</h1>
-			<p class="text-sm text-text-muted mt-0.5">{data.collaborators.length} {t(locale, 'collaborators.registered_count')}</p>
+			<p class="text-sm text-text-muted mt-0.5">{data.totalItems} {t(locale, 'collaborators.registered_count')}</p>
 		</div>
 		<button onclick={() => showNewForm = !showNewForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors shadow-sm">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M12 5v14m-7-7h14"/></svg>
@@ -53,7 +55,7 @@
 						<input type="text" name="documentId" id="documentId" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
 					</div>
 					<div class="md:col-span-2">
-						<label class="block text-sm font-medium text-text-secondary mb-2">{t(locale, 'collaborators.assigned_colonies')}</label>
+						<span class="block text-sm font-medium text-text-secondary mb-2">{t(locale, 'collaborators.assigned_colonies')}</span>
 						<div class="flex flex-wrap gap-2">
 							{#each data.colonies as c}
 								<label class="flex items-center gap-1.5 text-sm bg-surface-sunken px-3 py-2 rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors min-h-[44px]">
@@ -92,7 +94,7 @@
 	</div>
 
 	<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-		{#each data.collaborators as col}
+		{#each data.items as col}
 			{@const badge = statusConfig(col.status)}
 			<div class="bg-surface rounded-xl border border-border p-5 hover:border-primary/20 transition-colors">
 				<div class="flex items-start justify-between mb-3">
@@ -162,4 +164,6 @@
 			</div>
 		{/each}
 	</div>
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

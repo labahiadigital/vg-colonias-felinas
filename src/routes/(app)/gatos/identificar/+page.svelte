@@ -17,12 +17,16 @@
 	let error = $state('');
 
 	function handleFileSelect(event: Event) {
-		const input = event.target as HTMLInputElement;
+		const input = event.target;
+		if (!(input instanceof HTMLInputElement)) return;
 		const file = input.files?.[0];
 		if (!file) return;
 		photoFile = file;
 		const reader = new FileReader();
-		reader.onload = (e) => { photoPreview = e.target?.result as string; };
+		reader.onload = (e) => {
+			const result = e.target?.result;
+			if (typeof result === 'string') photoPreview = result;
+		};
 		reader.readAsDataURL(file);
 		results = null;
 		error = '';
@@ -53,7 +57,7 @@
 				results = data;
 			}
 		} catch {
-			error = 'Error de conexión';
+			error = t(locale, 'common.connection_error');
 		} finally {
 			loading = false;
 		}
@@ -69,7 +73,7 @@
 
 <div class="max-w-4xl mx-auto">
 	<div class="flex items-center gap-4 mb-6">
-		<a href="/gatos" class="p-2 rounded-lg hover:bg-surface-sunken transition-colors text-text-muted">
+		<a href="/gatos" class="p-2 rounded-lg hover:bg-surface-sunken transition-colors text-text-muted" aria-label="Volver a gatos">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5"><path d="M19 12H5m7-7l-7 7 7 7"/></svg>
 		</a>
 		<div>

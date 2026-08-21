@@ -17,7 +17,7 @@
 
 	function resolveColor(el: HTMLElement, raw: string): string {
 		if (raw.startsWith('var(')) {
-			const resolved = getComputedStyle(el).getPropertyValue(raw.slice(4, -1).split(',')[0].trim()).trim();
+			const resolved = getComputedStyle(el).getPropertyValue(raw.slice(4, -1).split(',')[0]?.trim() ?? '').trim();
 			return resolved || 'rgb(15, 118, 110)';
 		}
 		return raw;

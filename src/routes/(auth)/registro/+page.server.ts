@@ -2,9 +2,11 @@ import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { organizations, organizationMembers, users, roles, userRoles } from '$lib/server/db/schema.js';
 import { fail, redirect } from '@sveltejs/kit';
-import { auth } from '$lib/server/auth/index.js';
+import { auth, MIN_PASSWORD_LENGTH } from '$lib/server/auth/index.js';
 import { eq } from 'drizzle-orm';
-import { logAudit } from '$lib/server/audit.js';
+import { audit } from '$lib/server/audit.js';
+import { extractIp, type TenantContext } from '$lib/server/tenant.js';
+import { requireFields, getFormField } from '$lib/server/action-helpers.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) throw redirect(302, '/dashboard');
@@ -14,21 +16,19 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	default: async ({ request }) => {
 		const fd = await request.formData();
-		const orgName = fd.get('orgName') as string;
-		const orgSlug = fd.get('orgSlug') as string;
-		const orgType = fd.get('orgType') as string;
-		const city = fd.get('city') as string;
-		const province = fd.get('province') as string;
-		const adminName = fd.get('adminName') as string;
-		const adminEmail = fd.get('adminEmail') as string;
-		const adminPassword = fd.get('adminPassword') as string;
+		const { orgName, orgSlug, adminName, adminEmail, adminPassword } = requireFields(fd, {
+			orgName: 'Nombre de organización',
+			orgSlug: 'Identificador de organización',
+			adminName: 'Nombre del administrador',
+			adminEmail: 'Email del administrador',
+			adminPassword: 'Contraseña'
+		});
+		const orgType = getFormField(fd, 'orgType');
+		const city = getFormField(fd, 'city');
+		const province = getFormField(fd, 'province');
 
-		if (!orgName || !orgSlug || !adminName || !adminEmail || !adminPassword) {
-			return fail(400, { error: 'Todos los campos marcados son obligatorios' });
-		}
-
-		if (adminPassword.length < 8) {
-			return fail(400, { error: 'La contraseña debe tener al menos 8 caracteres' });
+		if (adminPassword.length < MIN_PASSWORD_LENGTH) {
+			return fail(400, { error: `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres` });
 		}
 
 		const existing = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.slug, orgSlug));
@@ -41,15 +41,6 @@ export const actions: Actions = {
 			return fail(400, { error: 'Ya existe un usuario con ese email' });
 		}
 
-		const [org] = await db.insert(organizations).values({
-			name: orgName,
-			slug: orgSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-			type: orgType || 'municipality',
-			city: city || null,
-			province: province || null,
-			plan: 'standard'
-		}).returning();
-
 		await auth.api.signUpEmail({
 			body: { name: adminName, email: adminEmail, password: adminPassword }
 		});
@@ -57,33 +48,46 @@ export const actions: Actions = {
 		const [newUser] = await db.select().from(users).where(eq(users.email, adminEmail));
 		if (!newUser) return fail(500, { error: 'Error creando el usuario administrador' });
 
-		await db.update(users).set({ activeOrganizationId: org.id }).where(eq(users.id, newUser.id));
+		const { org } = await db.transaction(async (tx) => {
+			const txOrgRows = await tx.insert(organizations).values({
+				name: orgName,
+				slug: orgSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+				type: orgType || 'municipality',
+				city: city || null,
+				province: province || null,
+				plan: 'standard'
+			}).returning();
+			const txOrg = txOrgRows[0];
+			if (!txOrg) throw new Error('Failed to create organization');
 
-		await db.insert(organizationMembers).values({
+			await tx.update(users).set({ activeOrganizationId: txOrg.id }).where(eq(users.id, newUser.id));
+
+			await tx.insert(organizationMembers).values({
+				organizationId: txOrg.id,
+				userId: newUser.id,
+				role: 'owner'
+			});
+
+			const roleRows = await tx.insert(roles).values({ name: 'admin', description: 'Administrador', organizationId: txOrg.id }).returning();
+			const newRole = roleRows[0];
+			if (!newRole) throw new Error('Failed to create admin role');
+
+			await tx.insert(userRoles).values({
+				userId: newUser.id,
+				roleId: newRole.id,
+				organizationId: txOrg.id
+			});
+
+			return { org: txOrg, roleId: newRole.id };
+		});
+
+		const ctx: TenantContext = {
+			userId: newUser.id,
 			organizationId: org.id,
-			userId: newUser.id,
-			role: 'owner'
-		});
+			ipAddress: extractIp(request)
+		};
 
-		let adminRole = await db.select().from(roles).where(eq(roles.name, 'admin')).limit(1);
-		if (adminRole.length === 0) {
-			const [newRole] = await db.insert(roles).values({ name: 'admin', description: 'Administrador', organizationId: org.id }).returning();
-			adminRole = [newRole];
-		}
-
-		await db.insert(userRoles).values({
-			userId: newUser.id,
-			roleId: adminRole[0].id,
-			organizationId: org.id
-		});
-
-		await logAudit({
-			userId: newUser.id,
-			entity: 'organization',
-			entityId: org.id,
-			action: 'create',
-			details: { orgName, orgSlug, plan: 'standard' }
-		});
+		await audit(ctx, 'organization', org.id, 'create', { orgName, orgSlug, plan: 'standard' });
 
 		throw redirect(302, '/login?registered=true');
 	}

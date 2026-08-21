@@ -3,33 +3,46 @@ import { db } from '$lib/server/db/index.js';
 import { collaborators, colonies } from '$lib/server/db/schema.js';
 import { eq, ilike, and } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
+import { requireAuthContext, getFormField, requireField, requireFields, getFormStringArray } from '$lib/server/action-helpers.js';
+import { audit } from '$lib/server/audit.js';
 import { notify } from '$lib/server/notifications.js';
+import { orgScope, escapeLike, verifyOrgOwnership, buildWhere, loadOrgColonies } from '$lib/server/tenant.js';
+import { guardedUpdateWith, guardedInsert } from '$lib/server/db-helpers.js';
+import { toDateString } from '$lib/index.js';
+import { toStringArray } from '$lib/index.js';
+import { parsePagination, paginateWithCount } from '$lib/server/pagination.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
 	const search = url.searchParams.get('q') ?? '';
 	const statusFilter = url.searchParams.get('status') ?? '';
+	const pagination = parsePagination(url);
 
-	let query = db.select().from(collaborators).$dynamic();
-	const conditions = [];
-	if (search) conditions.push(ilike(collaborators.name, `%${search}%`));
-	if (statusFilter) conditions.push(eq(collaborators.status, statusFilter));
-	if (conditions.length > 0) query = query.where(and(...conditions));
+	const whereClause = buildWhere(
+		orgScope(collaborators.organizationId, orgId),
+		search && ilike(collaborators.name, `%${escapeLike(search)}%`),
+		statusFilter && eq(collaborators.status, statusFilter)
+	);
 
-	const allCollaborators = await query;
-	const allColonies = await db.select({ id: colonies.id, name: colonies.name }).from(colonies);
+	const baseSelect = db.select().from(collaborators).$dynamic();
+	if (whereClause) baseSelect.where(whereClause);
+
+	const [paginated, allColonies] = await Promise.all([
+		paginateWithCount(baseSelect, collaborators, whereClause, pagination),
+		loadOrgColonies(orgId)
+	]);
 
 	const colonyMap = new Map(allColonies.map(c => [c.id, c.name]));
 
-	const enriched = allCollaborators.map(col => ({
+	const items = paginated.items.map(col => ({
 		...col,
-		colonyNames: Array.isArray(col.assignedColonies)
-			? (col.assignedColonies as string[]).map(id => colonyMap.get(id) ?? id)
-			: []
+		colonyNames: toStringArray(col.assignedColonies).map(id => colonyMap.get(id) ?? id)
 	}));
 
 	return {
 		locale: locals.locale,
-		collaborators: enriched,
+		...paginated,
+		items,
 		colonies: allColonies,
 		filters: { search, status: statusFilter }
 	};
@@ -37,46 +50,53 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const name = fd.get('name') as string;
-		const documentId = fd.get('documentId') as string;
-		const assignedColonies = fd.getAll('assignedColonies') as string[];
 
-		if (!name) return fail(400, { error: 'El nombre es obligatorio' });
+		const name = requireField(fd, 'name', 'El nombre');
+		const documentId = getFormField(fd, 'documentId');
+		const assignedColonies = getFormStringArray(fd, 'assignedColonies');
 
-		await db.insert(collaborators).values({
+		for (const cId of assignedColonies) {
+			if (!await verifyOrgOwnership(colonies, cId, ctx.organizationId)) {
+				return fail(404, { error: 'Colonia asignada no encontrada' });
+			}
+		}
+
+		await guardedInsert(collaborators, {
+			organizationId: ctx.organizationId,
 			name,
 			documentId: documentId || null,
 			assignedColonies: assignedColonies.length > 0 ? assignedColonies : [],
 			status: 'pending',
 			privacyNoticeSigned: false
-		});
+		}, ctx, 'collaborator', 'create', { name });
 
 		return { success: true };
 	},
 
 	updateStatus: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const status = fd.get('status') as string;
+		const { id, status } = requireFields(fd, { id: 'El ID', status: 'El estado' });
 
 		const updates: Record<string, unknown> = { status, updatedAt: new Date() };
 		if (status === 'active') {
 			const validUntil = new Date();
 			validUntil.setFullYear(validUntil.getFullYear() + 1);
-			updates.validUntil = validUntil.toISOString().split('T')[0];
+			updates.validUntil = toDateString(validUntil);
 		}
 
-		await db.update(collaborators).set(updates).where(eq(collaborators.id, id));
-
-		const [col] = await db.select().from(collaborators).where(eq(collaborators.id, id));
-		if (col?.userId) {
-			const statusLabels: Record<string, string> = { active: 'Activo', rejected: 'Rechazado', suspended: 'Suspendido', pending: 'Pendiente' };
-			await notify({ userId: col.userId, type: 'collaborator_status', title: 'Estado de colaborador actualizado', message: `Tu estado como colaborador/a ha cambiado a: ${statusLabels[status] || status}`, payload: { collaboratorId: id, status } });
-		}
-
+		const statusLabels: Record<string, string> = { active: 'Activo', rejected: 'Rechazado', suspended: 'Suspendido', pending: 'Pendiente' };
+		await guardedUpdateWith(collaborators, updates,
+			and(eq(collaborators.id, id), orgScope(collaborators.organizationId, ctx.organizationId)),
+			{ id: collaborators.id, userId: collaborators.userId }, async (rows) => {
+				const col = rows[0];
+				if (col?.userId) {
+					await notify({ organizationId: ctx.organizationId, userId: String(col.userId), type: 'collaborator_status', title: 'Estado de colaborador actualizado', message: `Tu estado como colaborador/a ha cambiado a: ${statusLabels[status] || status}`, payload: { collaboratorId: id, status } });
+				}
+				await audit(ctx, 'collaborator', id, 'change_status', { status });
+			});
 		return { updated: true };
 	}
 };

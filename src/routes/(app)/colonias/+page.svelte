@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
+
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let showNewForm = $state(false);
 
@@ -24,7 +25,7 @@
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
 			<h1 class="text-2xl font-bold text-text tracking-tight">{t(locale, 'colonies.title')}</h1>
-			<p class="text-sm text-text-muted mt-0.5">{data.colonies.length} {t(locale, 'providers.registered')}</p>
+			<p class="text-sm text-text-muted mt-0.5">{data.totalItems} {t(locale, 'providers.registered')}</p>
 		</div>
 		<button
 			onclick={() => showNewForm = !showNewForm}
@@ -121,7 +122,7 @@
 	</div>
 
 	<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-		{#each data.colonies as colony}
+		{#each data.items as colony}
 			{@const badge = statusConfig(colony.status)}
 			<a href="/colonias/{colony.id}" class="bg-surface rounded-xl border border-border hover:border-primary/30 transition-all group overflow-hidden interactive-card">
 				<div class="p-5">
@@ -161,4 +162,6 @@
 			</div>
 		{/each}
 	</div>
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

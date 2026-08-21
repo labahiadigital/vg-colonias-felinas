@@ -139,11 +139,9 @@ describe('Verificar endpoint', () => {
 
 describe('Credencial endpoint', () => {
 	let serverAvailable = false;
-	let cookie: string | null = null;
 
 	beforeAll(async () => {
 		serverAvailable = await isServerRunning();
-		if (serverAvailable) cookie = await getAuthCookie();
 	});
 
 	it('rejects unauthenticated request', async () => {

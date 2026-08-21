@@ -1,61 +1,66 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { conversations, messages, notifications, users, colonies } from '$lib/server/db/schema.js';
-import { desc, eq, and } from 'drizzle-orm';
-import { redirect, fail } from '@sveltejs/kit';
+import { desc, eq, and, inArray } from 'drizzle-orm';
+import { fail, redirect } from '@sveltejs/kit';
+import { requireAuthContext, getFormField, requireField, requireFields, getFormStringArray } from '$lib/server/action-helpers.js';
+import { orgScope, verifyOrgOwnership, loadOrgColonies, loadOrgUsers } from '$lib/server/tenant.js';
+import { toStringArray } from '$lib/index.js';
+import { guardedInsert } from '$lib/server/db-helpers.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) throw redirect(302, '/login');
+	const orgId = locals.organizationId;
+	if (!locals.user) redirect(302, '/login');
+	const userId = locals.user.id;
 
 	const allConversations = await db
 		.select()
 		.from(conversations)
+		.where(orgScope(conversations.organizationId, orgId))
 		.orderBy(desc(conversations.createdAt));
 
-	const convosWithLastMessage = [];
-	for (const c of allConversations) {
-		const participants = Array.isArray(c.participants) ? c.participants as string[] : [];
-		if (!participants.includes(locals.user.id) && participants.length > 0) continue;
+	const userConversations = allConversations.filter(c => {
+		const participants = toStringArray(c.participants);
+		return participants.length === 0 || participants.includes(userId);
+	});
 
-		const lastMsg = await db
-			.select({
+	const conversationIds = userConversations.map(c => c.id);
+
+	let lastMessages: Array<{ conversationId: string; content: string | null; sentAt: Date | null; senderName: string | null }> = [];
+	if (conversationIds.length > 0) {
+		lastMessages = await db
+			.selectDistinctOn([messages.conversationId], {
+				conversationId: messages.conversationId,
 				content: messages.content,
 				sentAt: messages.sentAt,
 				senderName: users.name
 			})
 			.from(messages)
 			.leftJoin(users, eq(messages.senderId, users.id))
-			.where(eq(messages.conversationId, c.id))
-			.orderBy(desc(messages.sentAt))
-			.limit(1);
-
-		convosWithLastMessage.push({
-			...c,
-			lastMessage: lastMsg[0] || null,
-			participantNames: participants
-		});
+			.where(inArray(messages.conversationId, conversationIds))
+			.orderBy(messages.conversationId, desc(messages.sentAt));
 	}
 
-	const userNotifications = await db
-		.select()
-		.from(notifications)
-		.where(eq(notifications.userId, locals.user.id))
-		.orderBy(desc(notifications.createdAt))
-		.limit(50);
+	const lastMsgMap = new Map(lastMessages.map(m => [m.conversationId, m]));
 
-	const allUsers = await db
-		.select({ id: users.id, name: users.name })
-		.from(users)
-		.orderBy(users.name);
+	const convosWithLastMessage = userConversations.map(c => ({
+		...c,
+		lastMessage: lastMsgMap.get(c.id) ?? null,
+		participantNames: toStringArray(c.participants)
+	}));
 
-	const allColonies = await db
-		.select({ id: colonies.id, name: colonies.name })
-		.from(colonies)
-		.orderBy(colonies.name);
+	const [userNotifications, allUsers, allColonies] = await Promise.all([
+		db.select().from(notifications)
+			.where(and(eq(notifications.userId, userId), orgScope(notifications.organizationId, orgId)))
+			.orderBy(desc(notifications.createdAt))
+			.limit(50),
+		loadOrgUsers(orgId),
+		loadOrgColonies(orgId)
+	]);
 
 	return {
 		locale: locals.locale,
-		currentUserId: locals.user.id,
+		currentUserId: userId,
 		conversations: convosWithLastMessage,
 		notifications: userNotifications,
 		users: allUsers,
@@ -65,66 +70,77 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	createConversation: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
 
-		const title = fd.get('title') as string;
-		const type = (fd.get('type') as string) || 'direct';
-		const colonyId = fd.get('colonyId') as string;
-		const zone = fd.get('zone') as string;
-		const roleFilter = fd.get('roleFilter') as string;
-		const participantIds = fd.getAll('participants') as string[];
+		const title = requireField(fd, 'title', 'El título');
 
-		if (!title) return fail(400, { error: 'Título obligatorio' });
+		const type = getFormField(fd, 'type') || 'direct';
+		const colonyId = getFormField(fd, 'colonyId');
+		if (colonyId && !await verifyOrgOwnership(colonies, colonyId, ctx.organizationId)) {
+			return fail(404, { error: 'Colonia no encontrada' });
+		}
 
-		const allParticipants = [...new Set([locals.user.id, ...participantIds])];
+		const zone = getFormField(fd, 'zone');
+		const roleFilter = getFormField(fd, 'roleFilter');
+		const participantIds = getFormStringArray(fd, 'participants');
 
-		await db.insert(conversations).values({
+		const allParticipants = [...new Set([ctx.userId, ...participantIds])];
+
+		await guardedInsert(conversations, {
+			organizationId: ctx.organizationId,
 			title,
 			type,
 			colonyId: colonyId || null,
 			zone: zone || null,
 			roleFilter: roleFilter || null,
 			participants: allParticipants
-		});
+		}, ctx, 'conversation', 'create', { title, type });
 
 		return { success: true };
 	},
+
 	sendMessage: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
 
-		const conversationId = fd.get('conversationId') as string;
-		const content = fd.get('content') as string;
+		const { conversationId, content } = requireFields(fd, {
+			conversationId: 'La conversación', content: 'El mensaje'
+		});
 
-		if (!conversationId || !content?.trim()) return fail(400, { error: 'Mensaje vacío' });
+		const [conv] = await db.select({ id: conversations.id }).from(conversations)
+			.where(and(eq(conversations.id, conversationId), orgScope(conversations.organizationId, ctx.organizationId)))
+			.limit(1);
+		if (!conv) return fail(404, { error: 'Conversación no encontrada' });
 
 		await db.insert(messages).values({
 			conversationId,
-			senderId: locals.user.id,
+			senderId: ctx.userId,
 			content: content.trim()
 		});
 
 		return { messageSent: true };
 	},
+
 	markRead: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
+		const id = getFormField(fd, 'id');
 
 		if (id) {
 			await db.update(notifications).set({ readAt: new Date(), delivered: true }).where(
-				and(eq(notifications.id, id), eq(notifications.userId, locals.user.id))
+				and(eq(notifications.id, id), eq(notifications.userId, ctx.userId), orgScope(notifications.organizationId, ctx.organizationId))
 			);
 		}
 
 		return { success: true };
 	},
+
 	markAllRead: async ({ locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals);
 
 		await db.update(notifications).set({ readAt: new Date(), delivered: true }).where(
-			eq(notifications.userId, locals.user.id)
+			and(eq(notifications.userId, ctx.userId), orgScope(notifications.organizationId, ctx.organizationId))
 		);
 
 		return { success: true };

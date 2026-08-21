@@ -7,6 +7,7 @@
 	let locale = $derived(data.locale);
 
 	import FileUpload from '$lib/components/ui/FileUpload.svelte';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let showNewForm = $state(false);
 	let catPhotoPath = $state('');
@@ -22,7 +23,7 @@
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
 			<h1 class="text-2xl font-bold text-text tracking-tight">{t(locale, 'cats.title')}</h1>
-			<p class="text-sm text-text-muted mt-0.5">{data.cats.length} {t(locale, 'providers.registered')}</p>
+			<p class="text-sm text-text-muted mt-0.5">{data.totalItems} {t(locale, 'providers.registered')}</p>
 		</div>
 		<button onclick={() => showNewForm = !showNewForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors shadow-sm">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M12 5v14m-7-7h14"/></svg>
@@ -122,7 +123,7 @@
 	</div>
 
 	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-		{#each data.cats as cat}
+		{#each data.items as cat}
 			{@const sex = sexConfig(cat.sex)}
 			<a href="/gatos/{cat.id}" class="bg-surface rounded-xl border border-border hover:border-primary/30 transition-all group p-4 interactive-card">
 				<div class="flex items-start gap-3">
@@ -151,4 +152,6 @@
 			</div>
 		{/each}
 	</div>
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

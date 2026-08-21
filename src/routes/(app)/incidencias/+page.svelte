@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
+	import { toRecord } from '$lib/index.js';
 	import type { PageData, ActionData } from './$types.js';
 	import FileUpload from '$lib/components/ui/FileUpload.svelte';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
@@ -52,7 +54,7 @@
 	}
 
 	function commentsForIncident(id: string) {
-		return (data.incidentComments || []).filter((c: any) => c.entityId === id);
+		return (data.incidentComments || []).filter((c) => c.entityId === id);
 	}
 </script>
 
@@ -60,7 +62,7 @@
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
 			<h1 class="text-2xl font-bold text-text tracking-tight">{t(locale, 'incidents.title')}</h1>
-			<p class="text-sm text-text-muted mt-0.5">{data.incidents.length} {t(locale, 'incidents.registered')}</p>
+			<p class="text-sm text-text-muted mt-0.5">{data.totalItems} {t(locale, 'incidents.registered')}</p>
 		</div>
 		<button onclick={() => showNewForm = !showNewForm} class="inline-flex items-center gap-2 px-4 py-2.5 bg-danger text-white text-sm font-medium rounded-lg hover:bg-danger/90 transition-colors shadow-sm">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
@@ -109,7 +111,7 @@
 						</select>
 					</div>
 					<div>
-						<label class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'incidents.location')}</label>
+						<span class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'incidents.location')}</span>
 						<button type="button" onclick={getLocation} class="w-full px-3 py-2 bg-info/8 text-info border border-info/20 rounded-lg text-sm font-medium hover:bg-info/12 transition-colors inline-flex items-center justify-center gap-2">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
 							{useGeo ? `${geoLat.slice(0, 8)}, ${geoLng.slice(0, 8)}` : t(locale, 'incidents.get_location')}
@@ -165,7 +167,7 @@
 	</div>
 
 	<div class="space-y-3">
-		{#each data.incidents as inc}
+		{#each data.items as inc}
 			{@const pBadge = priorityConfig(inc.priority)}
 			{@const sBadge = statusConfig(inc.status)}
 			{@const comments = commentsForIncident(inc.id)}
@@ -213,7 +215,7 @@
 				{#if expandedIncident === inc.id}
 					<div class="border-t border-border bg-surface-sunken p-4 sm:p-5 space-y-4">
 						<div>
-							<label class="text-xs font-medium text-text-muted uppercase tracking-wide">{t(locale, 'incidents.assign_responsible')}</label>
+							<span class="text-xs font-medium text-text-muted uppercase tracking-wide">{t(locale, 'incidents.assign_responsible')}</span>
 							<form method="POST" action="?/assign" use:enhance class="flex gap-2 mt-1.5">
 								<input type="hidden" name="id" value={inc.id} />
 								<select name="assignedTo" class="flex-1 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
@@ -228,10 +230,10 @@
 
 						{#if comments.length > 0}
 							<div>
-								<label class="text-xs font-medium text-text-muted uppercase tracking-wide mb-2 block">{t(locale, 'incidents.history')}</label>
+								<span class="text-xs font-medium text-text-muted uppercase tracking-wide mb-2 block">{t(locale, 'incidents.history')}</span>
 								<div class="space-y-2 max-h-40 overflow-y-auto">
 									{#each comments as c}
-										{@const det = c.details as Record<string, unknown> | null}
+										{@const det = toRecord(c.details)}
 										<div class="text-xs bg-surface p-3 rounded-lg border border-border">
 											<div class="flex justify-between text-text-muted">
 												<span class="font-medium text-text-secondary">{c.userName ?? t(locale, 'incidents.system')}</span>
@@ -278,8 +280,8 @@
 									{/each}
 								</select>
 								<select name="priority" class="px-2 py-1.5 bg-background border border-border rounded-lg text-xs">
-									{#each [['low', 'incidents.priority.low'], ['medium', 'incidents.priority.medium'], ['high', 'incidents.priority.high'], ['critical', 'incidents.priority.critical']] as [pVal, pKey]}
-										<option value={pVal} selected={inc.priority === pVal}>{t(locale, pKey)}</option>
+									{#each [['low', 'incidents.priority.low'], ['medium', 'incidents.priority.medium'], ['high', 'incidents.priority.high'], ['critical', 'incidents.priority.critical']] as pair}
+										<option value={pair[0] ?? ''} selected={inc.priority === pair[0]}>{t(locale, pair[1] ?? '')}</option>
 									{/each}
 								</select>
 								<input type="text" name="description" value={inc.description} class="px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
@@ -303,4 +305,6 @@
 			</div>
 		{/each}
 	</div>
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

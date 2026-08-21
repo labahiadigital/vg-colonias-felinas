@@ -1,88 +1,128 @@
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { colonies, cats, incidents, cerActions, collaborators, auditLogs, visits, volunteerHours, inspections, providers, providerInterventions, healthRecords, adoptions } from '$lib/server/db/schema.js';
+import { colonies, cats, incidents, cerActions, collaborators, visits, volunteerHours, inspections, providers, providerInterventions, healthRecords, adoptions } from '$lib/server/db/schema.js';
 import { eq, sql, gte, lte, and } from 'drizzle-orm';
+import { orgScope } from '$lib/server/tenant.js';
+import { requireApiContext } from '$lib/server/action-helpers.js';
+import { audit } from '$lib/server/audit.js';
+import { escHtml, htmlDocHeaders, REPORT_CSS } from '$lib/server/html.js';
+import { computeRate } from '$lib/index.js';
+import { rateLimitGuard } from '$lib/server/rate-limit.js';
 
-function esc(text: string | null | undefined): string {
-	if (!text) return '';
-	return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+async function fetchPeriodStats(periodStart: Date, periodEnd: Date, orgId: string | null | undefined) {
+	const os = (column: Parameters<typeof orgScope>[0]) => orgScope(column, orgId);
 
-async function fetchPeriodStats(periodStart: Date, periodEnd: Date) {
 	const [
-		totalColoniesR, activeColoniesR, totalCatsR, sterilizedCatsR,
-		microchippedR, totalIncidentsR, resolvedIncidentsR,
-		totalCERR, totalCollabR, activeCollabR, totalVisitsR, totalInspR,
-		passedInspR, activeProvidersR, totalInterventionsR,
-		totalCostR, totalVolHoursR, totalHealthR, geoColoniesR,
-		totalAdoptionsR,
+		colonyStats, catStats, incidentStats, cerStats,
+		collabStats, visitStats, inspStats, providerStats,
+		interventionStats, volHoursStats, healthStats, adoptionStats,
 		colonyBreakdown, cerByColony, costByColony
 	] = await Promise.all([
-		db.select({ c: sql<number>`count(*)` }).from(colonies),
-		db.select({ c: sql<number>`count(*)` }).from(colonies).where(eq(colonies.status, 'active')),
-		db.select({ c: sql<number>`count(*)` }).from(cats),
-		db.select({ c: sql<number>`count(*)` }).from(cats).where(eq(cats.sterilized, true)),
-		db.select({ c: sql<number>`count(*)` }).from(cats).where(sql`${cats.microchip} IS NOT NULL AND ${cats.microchip} != ''`),
-		db.select({ c: sql<number>`count(*)` }).from(incidents).where(and(gte(incidents.createdAt, periodStart), lte(incidents.createdAt, periodEnd))),
-		db.select({ c: sql<number>`count(*)` }).from(incidents).where(and(eq(incidents.status, 'resolved'), gte(incidents.createdAt, periodStart), lte(incidents.createdAt, periodEnd))),
-		db.select({ c: sql<number>`count(*)` }).from(cerActions).where(and(gte(cerActions.createdAt, periodStart), lte(cerActions.createdAt, periodEnd))),
-		db.select({ c: sql<number>`count(*)` }).from(collaborators),
-		db.select({ c: sql<number>`count(*)` }).from(collaborators).where(eq(collaborators.status, 'active')),
-		db.select({ c: sql<number>`count(*)` }).from(visits).where(and(gte(visits.visitedAt, periodStart), lte(visits.visitedAt, periodEnd))),
-		db.select({ c: sql<number>`count(*)` }).from(inspections).where(and(gte(inspections.createdAt, periodStart), lte(inspections.createdAt, periodEnd))),
-		db.select({ c: sql<number>`count(*)` }).from(inspections).where(and(eq(inspections.passed, true), gte(inspections.createdAt, periodStart), lte(inspections.createdAt, periodEnd))),
-		db.select({ c: sql<number>`count(*)` }).from(providers).where(eq(providers.status, 'active')),
-		db.select({ c: sql<number>`count(*)` }).from(providerInterventions).where(and(gte(providerInterventions.performedAt, periodStart), lte(providerInterventions.performedAt, periodEnd))),
-		db.select({ c: sql<number>`coalesce(sum(cost), 0)` }).from(providerInterventions).where(and(gte(providerInterventions.performedAt, periodStart), lte(providerInterventions.performedAt, periodEnd))),
-		db.select({ c: sql<number>`coalesce(sum(hours), 0)` }).from(volunteerHours).where(and(gte(volunteerHours.createdAt, periodStart), lte(volunteerHours.createdAt, periodEnd))),
-		db.select({ c: sql<number>`count(*)` }).from(healthRecords).where(and(gte(healthRecords.createdAt, periodStart), lte(healthRecords.createdAt, periodEnd))),
-		db.select({ c: sql<number>`count(*)` }).from(colonies).where(sql`${colonies.latitude} IS NOT NULL`),
-		db.select({ c: sql<number>`count(*)` }).from(adoptions).where(and(gte(adoptions.createdAt, periodStart), lte(adoptions.createdAt, periodEnd))),
+		db.select({
+			total: sql<number>`count(*)`,
+			active: sql<number>`count(*) filter (where ${colonies.status} = 'active')`,
+			geolocated: sql<number>`count(*) filter (where ${colonies.latitude} is not null)`
+		}).from(colonies).where(os(colonies.organizationId)),
+
+		db.select({
+			total: sql<number>`count(*)`,
+			sterilized: sql<number>`count(*) filter (where ${cats.sterilized} = true)`,
+			microchipped: sql<number>`count(*) filter (where ${cats.microchip} is not null and ${cats.microchip} != '')`
+		}).from(cats).where(os(cats.organizationId)),
+
+		db.select({
+			total: sql<number>`count(*) filter (where ${incidents.createdAt} >= ${periodStart} and ${incidents.createdAt} <= ${periodEnd})`,
+			resolved: sql<number>`count(*) filter (where ${incidents.status} = 'resolved' and ${incidents.createdAt} >= ${periodStart} and ${incidents.createdAt} <= ${periodEnd})`
+		}).from(incidents).where(os(incidents.organizationId)),
+
+		db.select({
+			total: sql<number>`count(*) filter (where ${cerActions.createdAt} >= ${periodStart} and ${cerActions.createdAt} <= ${periodEnd})`
+		}).from(cerActions).where(os(cerActions.organizationId)),
+
+		db.select({
+			total: sql<number>`count(*)`,
+			active: sql<number>`count(*) filter (where ${collaborators.status} = 'active')`
+		}).from(collaborators).where(os(collaborators.organizationId)),
+
+		db.select({
+			total: sql<number>`count(*) filter (where ${visits.visitedAt} >= ${periodStart} and ${visits.visitedAt} <= ${periodEnd})`
+		}).from(visits).where(os(visits.organizationId)),
+
+		db.select({
+			total: sql<number>`count(*) filter (where ${inspections.createdAt} >= ${periodStart} and ${inspections.createdAt} <= ${periodEnd})`,
+			passed: sql<number>`count(*) filter (where ${inspections.passed} = true and ${inspections.createdAt} >= ${periodStart} and ${inspections.createdAt} <= ${periodEnd})`
+		}).from(inspections).where(os(inspections.organizationId)),
+
+		db.select({
+			active: sql<number>`count(*) filter (where ${providers.status} = 'active')`
+		}).from(providers).where(os(providers.organizationId)),
+
+		db.select({
+			total: sql<number>`count(*) filter (where ${providerInterventions.performedAt} >= ${periodStart} and ${providerInterventions.performedAt} <= ${periodEnd})`,
+			cost: sql<number>`coalesce(sum(${providerInterventions.cost}) filter (where ${providerInterventions.performedAt} >= ${periodStart} and ${providerInterventions.performedAt} <= ${periodEnd}), 0)`
+		}).from(providerInterventions).where(os(providerInterventions.organizationId)),
+
+		db.select({
+			total: sql<number>`coalesce(sum(${volunteerHours.hours}) filter (where ${volunteerHours.createdAt} >= ${periodStart} and ${volunteerHours.createdAt} <= ${periodEnd}), 0)`
+		}).from(volunteerHours).where(os(volunteerHours.organizationId)),
+
+		db.select({
+			total: sql<number>`count(*) filter (where ${healthRecords.createdAt} >= ${periodStart} and ${healthRecords.createdAt} <= ${periodEnd})`
+		}).from(healthRecords).where(os(healthRecords.organizationId)),
+
+		db.select({
+			total: sql<number>`count(*) filter (where ${adoptions.createdAt} >= ${periodStart} and ${adoptions.createdAt} <= ${periodEnd})`
+		}).from(adoptions).where(os(adoptions.organizationId)),
+
 		db.select({
 			colonyName: colonies.name,
 			district: colonies.district,
 			catCount: sql<number>`count(${cats.id})`,
 			sterilizedCount: sql<number>`count(case when ${cats.sterilized} = true then 1 end)`
-		}).from(colonies).leftJoin(cats, eq(cats.colonyId, colonies.id)).groupBy(colonies.name, colonies.district),
+		}).from(colonies).leftJoin(cats, eq(cats.colonyId, colonies.id)).where(os(colonies.organizationId)).groupBy(colonies.name, colonies.district),
+
 		db.select({
 			colonyName: colonies.name,
 			cerCount: sql<number>`count(${cerActions.id})`
 		}).from(cerActions)
 			.innerJoin(colonies, eq(cerActions.colonyId, colonies.id))
-			.where(and(gte(cerActions.createdAt, periodStart), lte(cerActions.createdAt, periodEnd)))
+			.where(and(gte(cerActions.createdAt, periodStart), lte(cerActions.createdAt, periodEnd), os(cerActions.organizationId)))
 			.groupBy(colonies.name),
+
 		db.select({
 			colonyName: colonies.name,
 			totalCost: sql<number>`coalesce(sum(${providerInterventions.cost}), 0)`,
 			interventionCount: sql<number>`count(${providerInterventions.id})`
 		}).from(providerInterventions)
 			.innerJoin(colonies, eq(providerInterventions.colonyId, colonies.id))
-			.where(and(gte(providerInterventions.performedAt, periodStart), lte(providerInterventions.performedAt, periodEnd)))
+			.where(and(gte(providerInterventions.performedAt, periodStart), lte(providerInterventions.performedAt, periodEnd), os(providerInterventions.organizationId)))
 			.groupBy(colonies.name)
 	]);
 
-	const n = (r: { c: number }[]) => Number(r[0]?.c ?? 0);
-	const tc = n(totalCatsR);
-	const sc = n(sterilizedCatsR);
-	const totalCol = n(totalColoniesR);
-	const geoCol = n(geoColoniesR);
-	const totalInc = n(totalIncidentsR);
-	const resolvedInc = n(resolvedIncidentsR);
-	const totalCost = n(totalCostR);
+	const tc = Number(catStats[0]?.total ?? 0);
+	const sc = Number(catStats[0]?.sterilized ?? 0);
+	const totalCol = Number(colonyStats[0]?.total ?? 0);
+	const geoCol = Number(colonyStats[0]?.geolocated ?? 0);
+	const totalInc = Number(incidentStats[0]?.total ?? 0);
+	const resolvedInc = Number(incidentStats[0]?.resolved ?? 0);
+	const totalCost = Number(interventionStats[0]?.cost ?? 0);
 
 	return {
-		totalColonies: totalCol, activeColonies: n(activeColoniesR),
-		totalCats: tc, sterilizedCats: sc, microchipped: n(microchippedR),
-		sterilizationRate: tc > 0 ? Math.round((sc / tc) * 100) : 0,
+		totalColonies: totalCol, activeColonies: Number(colonyStats[0]?.active ?? 0),
+		totalCats: tc, sterilizedCats: sc, microchipped: Number(catStats[0]?.microchipped ?? 0),
+		sterilizationRate: computeRate(sc, tc),
 		totalIncidents: totalInc, resolvedIncidents: resolvedInc,
-		incidentResolutionRate: totalInc > 0 ? Math.round((resolvedInc / totalInc) * 100) : 0,
-		totalCER: n(totalCERR), totalCollab: n(totalCollabR), activeCollab: n(activeCollabR),
-		totalVisits: n(totalVisitsR), totalInsp: n(totalInspR), passedInsp: n(passedInspR),
-		activeProviders: n(activeProvidersR), totalInterventions: n(totalInterventionsR),
-		totalCost, volunteerHours: n(totalVolHoursR),
-		totalHealth: n(totalHealthR), geoColonies: geoCol,
-		geoRate: totalCol > 0 ? Math.round((geoCol / totalCol) * 100) : 0,
-		totalAdoptions: n(totalAdoptionsR),
+		incidentResolutionRate: computeRate(resolvedInc, totalInc),
+		totalCER: Number(cerStats[0]?.total ?? 0),
+		totalCollab: Number(collabStats[0]?.total ?? 0), activeCollab: Number(collabStats[0]?.active ?? 0),
+		totalVisits: Number(visitStats[0]?.total ?? 0),
+		totalInsp: Number(inspStats[0]?.total ?? 0), passedInsp: Number(inspStats[0]?.passed ?? 0),
+		activeProviders: Number(providerStats[0]?.active ?? 0),
+		totalInterventions: Number(interventionStats[0]?.total ?? 0),
+		totalCost, volunteerHours: Number(volHoursStats[0]?.total ?? 0),
+		totalHealth: Number(healthStats[0]?.total ?? 0), geoColonies: geoCol,
+		geoRate: computeRate(geoCol, totalCol),
+		totalAdoptions: Number(adoptionStats[0]?.total ?? 0),
 		costPerAnimal: tc > 0 ? Number((totalCost / tc).toFixed(2)) : 0,
 		colonyBreakdown,
 		cerByColony,
@@ -90,41 +130,17 @@ async function fetchPeriodStats(periodStart: Date, periodEnd: Date) {
 	};
 }
 
-const CSS = `
-  @page { margin: 2cm; size: A4; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; font-size: 11px; line-height: 1.5; }
-  h1 { color: #1a5632; font-size: 20px; border-bottom: 3px solid #1a5632; padding-bottom: 8px; text-align: center; }
-  h2 { color: #1a5632; font-size: 15px; margin-top: 22px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
-  h3 { color: #1a5632; font-size: 12px; margin-top: 14px; }
-  .header { text-align: center; margin-bottom: 24px; border: 2px solid #1a5632; padding: 16px; border-radius: 8px; }
-  .header p { color: #666; margin: 2px 0; font-size: 11px; }
-  .meta { background: #f4f7f6; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; font-size: 10px; display: flex; justify-content: space-between; }
-  table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 11px; }
-  th { background: #1a5632; color: white; padding: 6px 10px; text-align: left; font-size: 10px; }
-  td { padding: 6px 10px; border-bottom: 1px solid #e0e0e0; }
-  tr:nth-child(even) td { background: #f9f9f9; }
-  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
-  .kpi { background: #f4f7f6; border-radius: 6px; padding: 10px; text-align: center; }
-  .kpi .value { font-size: 20px; font-weight: bold; color: #1a5632; }
-  .kpi .label { font-size: 9px; color: #666; margin-top: 2px; }
-  .badge-ok { background: #d1fae5; color: #065f46; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
-  .badge-ko { background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
-  .section { page-break-inside: avoid; }
-  .summary-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 12px; margin: 12px 0; }
-  .footer { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 9px; color: #999; text-align: center; }
-  .signature-area { margin-top: 40px; display: flex; justify-content: space-between; }
-  .signature-box { width: 45%; border-top: 1px solid #333; padding-top: 8px; text-align: center; font-size: 10px; }
-`;
+const CSS = REPORT_CSS;
 
-export const GET: RequestHandler = async ({ locals, url }) => {
-	if (!locals.user) {
-		return new Response('No autorizado', { status: 401 });
-	}
-
-	const year = parseInt(url.searchParams.get('year') || String(new Date().getFullYear()));
+export const GET: RequestHandler = async ({ locals, url, request }) => {
+	const ctx = requireApiContext(locals, request);
+	const blocked = rateLimitGuard('export', ctx.userId, request);
+	if (blocked) return blocked;
+	const year = parseInt(url.searchParams.get('year') || String(new Date().getFullYear()), 10);
 	const periodStart = new Date(year, 0, 1);
 	const periodEnd = new Date(year, 11, 31, 23, 59, 59);
-	const stats = await fetchPeriodStats(periodStart, periodEnd);
+	const orgId = ctx.organizationId;
+	const stats = await fetchPeriodStats(periodStart, periodEnd, orgId);
 	const now = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
 
 	const cerMap = new Map(stats.cerByColony.map(c => [c.colonyName, Number(c.cerCount)]));
@@ -136,10 +152,10 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		const costInfo = costMap.get(col.colonyName) ?? { cost: 0, count: 0 };
 		const catCount = Number(col.catCount);
 		const sterCount = Number(col.sterilizedCount);
-		const rate = catCount > 0 ? Math.round((sterCount / catCount) * 100) : 0;
+		const rate = computeRate(sterCount, catCount);
 		colonyRows += `<tr>
-			<td>${esc(col.colonyName)}</td>
-			<td>${esc(col.district ?? '-')}</td>
+			<td>${escHtml(col.colonyName)}</td>
+			<td>${escHtml(col.district ?? '-')}</td>
 			<td>${catCount}</td>
 			<td>${sterCount} (${rate}%)</td>
 			<td>${cer}</td>
@@ -165,7 +181,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 
 <div class="meta">
 	<span><strong>Generado:</strong> ${now}</span>
-	<span><strong>Usuario:</strong> ${esc(locals.user.name)}</span>
+	<span><strong>Usuario:</strong> ${escHtml(locals.user?.name ?? '')}</span>
 	<span><strong>Plataforma:</strong> Gatopolis v2.0</span>
 </div>
 
@@ -290,23 +306,14 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 
 <div class="footer">
 	<p>Documento generado autom&aacute;ticamente por Gatopolis - Plataforma de Gesti&oacute;n de Colonias Felinas</p>
-	<p>${now} - ${esc(locals.user.email)}</p>
+	<p>${now} - ${escHtml(locals.user?.email ?? '')}</p>
 </div>
 </body>
 </html>`;
 
-	await db.insert(auditLogs).values({
-		userId: locals.user.id,
-		entity: 'subsidy_report',
-		entityId: `dgda-${year}`,
-		action: 'export',
-		details: { type: 'dgda', year, format: 'html' }
-	});
+	await audit(ctx, 'subsidy_report', `dgda-${year}`, 'export', { type: 'dgda', year, format: 'html' });
 
 	return new Response(html, {
-		headers: {
-			'Content-Type': 'text/html; charset=utf-8',
-			'Content-Disposition': `attachment; filename="memoria-dgda-${year}.html"`
-		}
+		headers: htmlDocHeaders(`memoria-dgda-${year}.html`, 'attachment')
 	});
 };

@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { t, localeNames } from '$lib/i18n/index.js';
+	import { t } from '$lib/i18n/index.js';
 	import type { PageData } from './$types.js';
 
 	let { data }: { data: PageData } = $props();
-	const locale = data.locale;
+	const locale = $derived(data.locale);
 
 	let email = $state('');
 	let sent = $state(false);
@@ -85,9 +85,9 @@
 		</div>
 
 		<div class="flex justify-center gap-3 text-xs text-text-muted mt-6">
-			<a href="/privacidad" class="hover:text-text-secondary transition-colors">Privacidad</a>
+			<a href="/privacidad" class="hover:text-text-secondary transition-colors">{t(locale, 'auth.privacy')}</a>
 			<span>·</span>
-			<a href="/terminos" class="hover:text-text-secondary transition-colors">Términos</a>
+			<a href="/terminos" class="hover:text-text-secondary transition-colors">{t(locale, 'auth.terms')}</a>
 		</div>
 	</div>
 </div>

@@ -1,45 +1,49 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { inspections, inspectionTemplates, colonies, users, auditLogs } from '$lib/server/db/schema.js';
-import { desc, eq } from 'drizzle-orm';
-import { redirect, fail } from '@sveltejs/kit';
+import { inspections, inspectionTemplates, colonies } from '$lib/server/db/schema.js';
+import { desc, eq, and } from 'drizzle-orm';
+import { fail } from '@sveltejs/kit';
+import { requireAuthContext, getFormField, requireField } from '$lib/server/action-helpers.js';
+import { orgScope, verifyOrgOwnership, loadOrgColonies } from '$lib/server/tenant.js';
+import { guardedUpdate, guardedDelete, guardedInsert } from '$lib/server/db-helpers.js';
+import { parsePagination, paginateWithCount } from '$lib/server/pagination.js';
+import { toDateString } from '$lib/index.js';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) throw redirect(302, '/login');
+export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
+	const pagination = parsePagination(url);
+	const whereInsp = orgScope(inspections.organizationId, orgId);
 
-	const allInspections = await db
-		.select({
-			id: inspections.id,
-			templateId: inspections.templateId,
-			colonyId: inspections.colonyId,
-			colonyName: colonies.name,
-			inspectorId: inspections.inspectorId,
-			results: inspections.results,
-			photos: inspections.photos,
-			notes: inspections.notes,
-			score: inspections.score,
-			passed: inspections.passed,
-			followUpRequired: inspections.followUpRequired,
-			followUpDate: inspections.followUpDate,
-			createdAt: inspections.createdAt
-		})
+	const baseSelect = db.select({
+		id: inspections.id,
+		templateId: inspections.templateId,
+		colonyId: inspections.colonyId,
+		colonyName: colonies.name,
+		inspectorId: inspections.inspectorId,
+		results: inspections.results,
+		photos: inspections.photos,
+		notes: inspections.notes,
+		score: inspections.score,
+		passed: inspections.passed,
+		followUpRequired: inspections.followUpRequired,
+		followUpDate: inspections.followUpDate,
+		createdAt: inspections.createdAt
+	})
 		.from(inspections)
 		.leftJoin(colonies, eq(inspections.colonyId, colonies.id))
-		.orderBy(desc(inspections.createdAt));
+		.where(whereInsp)
+		.orderBy(desc(inspections.createdAt))
+		.$dynamic();
 
-	const templates = await db
-		.select()
-		.from(inspectionTemplates)
-		.orderBy(inspectionTemplates.name);
-
-	const allColonies = await db
-		.select({ id: colonies.id, name: colonies.name })
-		.from(colonies)
-		.orderBy(colonies.name);
+	const [paginated, templates, allColonies] = await Promise.all([
+		paginateWithCount(baseSelect, inspections, whereInsp, pagination),
+		db.select().from(inspectionTemplates).where(orgScope(inspectionTemplates.organizationId, orgId)).orderBy(inspectionTemplates.name),
+		loadOrgColonies(orgId)
+	]);
 
 	return {
 		locale: locals.locale,
-		inspections: allInspections,
+		...paginated,
 		templates,
 		colonies: allColonies
 	};
@@ -47,19 +51,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
 
-		const templateId = fd.get('templateId') as string;
-		const colonyId = fd.get('colonyId') as string;
-		const notes = fd.get('notes') as string;
-		const resultsRaw = fd.get('results') as string;
-		const scoreRaw = fd.get('score') as string;
-		const passedRaw = fd.get('passed') as string;
+		const colonyId = requireField(fd, 'colonyId', 'La colonia');
 
-		if (!colonyId) {
-			return fail(400, { error: 'Colonia es obligatoria' });
+		if (!await verifyOrgOwnership(colonies, colonyId, ctx.organizationId)) {
+			return fail(404, { error: 'Colonia no encontrada' });
 		}
+
+		const templateId = getFormField(fd, 'templateId');
+		if (templateId && !await verifyOrgOwnership(inspectionTemplates, templateId, ctx.organizationId)) {
+			return fail(404, { error: 'Plantilla no encontrada' });
+		}
+
+		const notes = getFormField(fd, 'notes');
+		const resultsRaw = getFormField(fd, 'results');
+		const scoreRaw = getFormField(fd, 'score');
+		const passedRaw = getFormField(fd, 'passed');
 
 		let results: Record<string, unknown> = {};
 		if (resultsRaw) {
@@ -70,92 +79,67 @@ export const actions: Actions = {
 		const passed = passedRaw === 'true' ? true : passedRaw === 'false' ? false : null;
 		const followUpRequired = passed === false;
 
-		const [inspection] = await db.insert(inspections).values({
+		await guardedInsert(inspections, {
+			organizationId: ctx.organizationId,
 			templateId: templateId || null,
 			colonyId,
-			inspectorId: locals.user.id,
+			inspectorId: ctx.userId,
 			results,
 			notes: notes || null,
 			score,
 			passed,
 			followUpRequired,
-			followUpDate: followUpRequired ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null
-		}).returning();
-
-		await db.insert(auditLogs).values({
-			userId: locals.user.id,
-			entity: 'inspection',
-			entityId: inspection.id,
-			action: 'create',
-			details: { colonyId, templateId }
-		});
+			followUpDate: followUpRequired ? toDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)) : null
+		}, ctx, 'inspection', 'create', { colonyId, templateId });
 
 		return { success: true };
 	},
+
 	createTemplate: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
+		const name = requireField(fd, 'name', 'El nombre de plantilla');
 
-		const name = fd.get('name') as string;
-		const fieldsRaw = fd.get('fields') as string;
-
-		if (!name) return fail(400, { error: 'Nombre de plantilla obligatorio' });
-
+		const fieldsRaw = getFormField(fd, 'fields');
 		let schema: unknown[] = [];
 		if (fieldsRaw) {
 			try { schema = JSON.parse(fieldsRaw); } catch { schema = []; }
 		}
 
-		await db.insert(inspectionTemplates).values({ name, schema });
+		await guardedInsert(inspectionTemplates, { organizationId: ctx.organizationId, name, schema }, ctx, 'inspection_template', 'create', { name });
+
 		return { templateSuccess: true };
 	},
 
 	edit: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const colonyId = fd.get('colonyId') as string;
-		const notes = fd.get('notes') as string;
-		const scoreRaw = fd.get('score') as string;
-		const passedRaw = fd.get('passed') as string;
+		const id = requireField(fd, 'id', 'El ID');
 
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const colonyId = getFormField(fd, 'colonyId');
+		const notes = getFormField(fd, 'notes');
+		const scoreRaw = getFormField(fd, 'score');
+		const passedRaw = getFormField(fd, 'passed');
 
 		const score = scoreRaw ? parseInt(scoreRaw, 10) : undefined;
 		const passed = passedRaw === 'true' ? true : passedRaw === 'false' ? false : undefined;
 
-		await db.update(inspections).set({
-			...(colonyId && { colonyId }),
-			notes: notes || null,
-			...(score !== undefined && { score }),
-			...(passed !== undefined && { passed }),
+		await guardedUpdate(inspections, {
+			...(colonyId && { colonyId }), notes: notes || null,
+			...(score !== undefined && { score }), ...(passed !== undefined && { passed }),
 			followUpRequired: passed === false
-		}).where(eq(inspections.id, id));
-
-		await db.insert(auditLogs).values({
-			userId: locals.user.id,
-			entity: 'inspection',
-			entityId: id,
-			action: 'update',
-			details: { colonyId, score }
-		});
+		}, and(eq(inspections.id, id), orgScope(inspections.organizationId, ctx.organizationId)),
+			ctx, 'inspection', id, 'update', { colonyId, score });
 		return { edited: true };
 	},
 
 	delete: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const id = requireField(fd, 'id', 'El ID');
 
-		await db.delete(inspections).where(eq(inspections.id, id));
-		await db.insert(auditLogs).values({
-			userId: locals.user.id,
-			entity: 'inspection',
-			entityId: id,
-			action: 'delete',
-			details: {}
-		});
+		await guardedDelete(inspections, and(eq(inspections.id, id), orgScope(inspections.organizationId, ctx.organizationId)),
+			ctx, 'inspection', id, 'delete');
 		return { deleted: true };
 	}
 };

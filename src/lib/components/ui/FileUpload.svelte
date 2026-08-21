@@ -18,7 +18,8 @@
 	let uploadedFile = $state<{ path: string; filename: string } | null>(null);
 
 	async function handleFile(e: Event) {
-		const input = e.target as HTMLInputElement;
+		const input = e.target;
+		if (!(input instanceof HTMLInputElement)) return;
 		const file = input.files?.[0];
 		if (!file) return;
 

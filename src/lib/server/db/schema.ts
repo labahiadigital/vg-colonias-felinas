@@ -224,6 +224,7 @@ export const cats = pgTable('cats', {
 
 export const healthRecords = pgTable('health_records', {
 	id: uuid('id').primaryKey().defaultRandom(),
+	organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
 	catId: uuid('cat_id')
 		.notNull()
 		.references(() => cats.id, { onDelete: 'cascade' }),
@@ -673,6 +674,12 @@ export const regulatoryTemplates = pgTable('regulatory_templates', {
 });
 
 // ─── Audit Logs ─────────────────────────────────────────────────
+
+export const rateLimitBuckets = pgTable('rate_limit_buckets', {
+	key: text('key').primaryKey(),
+	timestamps: jsonb('timestamps').notNull().$type<number[]>(),
+	updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
 
 export const auditLogs = pgTable('audit_logs', {
 	id: uuid('id').primaryKey().defaultRandom(),

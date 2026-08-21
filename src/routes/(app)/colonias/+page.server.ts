@@ -1,15 +1,28 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { colonies, cats } from '$lib/server/db/schema.js';
-import { eq, sql, ilike, and } from 'drizzle-orm';
+import { colonies } from '$lib/server/db/schema.js';
 import { fail } from '@sveltejs/kit';
+import { eq, ilike, sql } from 'drizzle-orm';
+import { requireAuthContext, getFormField, getFormNumber } from '$lib/server/action-helpers.js';
+import { orgScope, escapeLike, buildWhere, loadOrgColonies } from '$lib/server/tenant.js';
+import { guardedInsert } from '$lib/server/db-helpers.js';
+import { parsePagination, paginateWithCount } from '$lib/server/pagination.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
 	const search = url.searchParams.get('q') ?? '';
 	const statusFilter = url.searchParams.get('status') ?? '';
 	const districtFilter = url.searchParams.get('district') ?? '';
+	const pagination = parsePagination(url);
 
-	let query = db.select({
+	const whereClause = buildWhere(
+		orgScope(colonies.organizationId, orgId),
+		search && ilike(colonies.name, `%${escapeLike(search)}%`),
+		statusFilter && eq(colonies.status, statusFilter),
+		districtFilter && eq(colonies.district, districtFilter)
+	);
+
+	const baseSelect = db.select({
 		id: colonies.id,
 		name: colonies.name,
 		status: colonies.status,
@@ -23,48 +36,45 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		sterilizedCount: sql<number>`(SELECT count(*) FROM cats WHERE cats.colony_id = ${colonies.id} AND cats.sterilized = true)`
 	}).from(colonies).$dynamic();
 
-	const conditions = [];
-	if (search) conditions.push(ilike(colonies.name, `%${search}%`));
-	if (statusFilter) conditions.push(eq(colonies.status, statusFilter));
-	if (districtFilter) conditions.push(eq(colonies.district, districtFilter));
-	if (conditions.length > 0) query = query.where(and(...conditions));
+	if (whereClause) baseSelect.where(whereClause);
 
-	const allColonies = await query;
-
-	const districts = await db.selectDistinct({ district: colonies.district }).from(colonies);
+	const [paginated, districts] = await Promise.all([
+		paginateWithCount(baseSelect, colonies, whereClause, pagination),
+		db.selectDistinct({ district: colonies.district }).from(colonies).where(orgScope(colonies.organizationId, orgId))
+	]);
 
 	return {
 		locale: locals.locale,
-		colonies: allColonies,
-		districts: districts.map(d => d.district).filter(Boolean) as string[],
+		...paginated,
+		districts: districts.map(d => d.district).filter((d): d is string => d != null),
 		filters: { search, status: statusFilter, district: districtFilter }
 	};
 };
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
+		const fd = await request.formData();
 
-		const formData = await request.formData();
-		const name = formData.get('name') as string;
-		const district = formData.get('district') as string;
-		const classification = formData.get('classification') as string;
-		const description = formData.get('description') as string;
-		const latitude = parseFloat(formData.get('latitude') as string);
-		const longitude = parseFloat(formData.get('longitude') as string);
-
+		const name = getFormField(fd, 'name').trim();
 		if (!name) return fail(400, { error: 'El nombre es obligatorio' });
+		const district = getFormField(fd, 'district');
+		const classification = getFormField(fd, 'classification');
+		const description = getFormField(fd, 'description');
+		const latitude = getFormNumber(fd, 'latitude');
+		const longitude = getFormNumber(fd, 'longitude');
 
-		const [newColony] = await db.insert(colonies).values({
+		const colonyId = await guardedInsert(colonies, {
+			organizationId: ctx.organizationId,
 			name,
 			district: district || null,
 			classification: classification || null,
 			description: description || null,
-			latitude: isNaN(latitude) ? null : latitude,
-			longitude: isNaN(longitude) ? null : longitude,
+			latitude,
+			longitude,
 			status: 'active'
-		}).returning({ id: colonies.id });
+		}, ctx, 'colony', 'create', { name, district });
 
-		return { success: true, colonyId: newColony.id };
+		return { success: true, colonyId };
 	}
 };

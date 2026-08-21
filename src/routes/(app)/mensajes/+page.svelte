@@ -29,7 +29,8 @@
 
 	async function handleSendMessage(e: SubmitEvent) {
 		e.preventDefault();
-		const formEl = e.target as HTMLFormElement;
+		const formEl = e.target;
+		if (!(formEl instanceof HTMLFormElement)) return;
 		const fd = new FormData(formEl);
 		const res = await fetch(formEl.action, { method: 'POST', body: fd });
 		if (res.ok) {
@@ -46,7 +47,7 @@
 			broadcast: { bg: 'bg-warning/8 text-warning', label: t(locale, 'messages.badge_broadcast') },
 			direct: { bg: 'bg-surface-sunken text-text-muted', label: '' }
 		};
-		return map[type] ?? map['direct'];
+		return map[type] ?? { bg: 'bg-surface-sunken text-text-muted', label: '' };
 	}
 </script>
 
@@ -120,7 +121,7 @@
 					</div>
 				{:else if convoType === 'direct'}
 					<div>
-						<label class="block text-sm font-medium text-text-secondary mb-2">{t(locale, 'messages.participants')}</label>
+						<span class="block text-sm font-medium text-text-secondary mb-2">{t(locale, 'messages.participants')}</span>
 						<div class="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
 							{#each data.users as u}
 								<label class="flex items-center gap-1.5 text-sm bg-surface-sunken px-3 py-2 rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors min-h-[40px]">
@@ -181,7 +182,7 @@
 			<div class="bg-surface rounded-xl border border-border overflow-hidden">
 				<div class="divide-y divide-border">
 					{#each data.conversations.filter((c: Record<string, unknown>) => convoFilter === 'all' || (c.type || 'direct') === convoFilter) as convo}
-						{@const badge = typeBadge((convo.type as string) || 'direct')}
+						{@const badge = typeBadge(typeof convo.type === 'string' ? convo.type : 'direct')}
 						<button onclick={() => selectConversation(convo.id)}
 							class="w-full text-left px-4 py-3.5 hover:bg-surface-sunken transition-colors min-h-[60px] {selectedConversation === convo.id ? 'bg-primary/5 border-l-2 border-l-primary' : ''}">
 							<div class="flex items-center gap-2">

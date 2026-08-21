@@ -8,7 +8,6 @@ function parsePagination(searchParams: URLSearchParams) {
 }
 
 function buildPaginationLinks(page: number, limit: number, total: number) {
-	const totalPages = Math.ceil(total / limit);
 	return {
 		self: `/api/v1/resource?page=${page}&limit=${limit}`,
 		...(page * limit < total ? { next: `/api/v1/resource?page=${page + 1}&limit=${limit}` } : {}),

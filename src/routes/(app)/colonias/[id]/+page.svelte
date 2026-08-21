@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import type { PageData, ActionData } from './$types.js';
 
@@ -56,7 +55,7 @@
 
 			L.marker([colony.latitude, colony.longitude]).addTo(map).bindPopup(colony.name);
 
-			data.feedingPoints.forEach((fp: any) => {
+			data.feedingPoints.forEach((fp) => {
 				if (fp.latitude && fp.longitude) {
 					L.circleMarker([fp.latitude, fp.longitude], { radius: 6, color: '#10b981', fillOpacity: 0.8 })
 						.addTo(map)
@@ -172,7 +171,7 @@
 							<div class="text-xs text-text-muted mt-0.5">{t(locale, 'dashboard.censed_cats')}</div>
 						</div>
 						<div class="p-4 bg-accent/5 rounded-lg border border-accent/10">
-							<div class="text-2xl font-bold text-accent">{data.cats.filter((c: any) => c.sterilized).length}</div>
+							<div class="text-2xl font-bold text-accent">{data.cats.filter((c) => c.sterilized).length}</div>
 							<div class="text-xs text-text-muted mt-0.5">{t(locale, 'dashboard.sterilized')}</div>
 						</div>
 						<div class="p-4 bg-info/5 rounded-lg border border-info/10">

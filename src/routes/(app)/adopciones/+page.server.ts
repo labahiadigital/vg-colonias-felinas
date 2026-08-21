@@ -1,63 +1,77 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { adoptions, cats, colonies, auditLogs } from '$lib/server/db/schema.js';
-import { desc, eq } from 'drizzle-orm';
-import { redirect, fail } from '@sveltejs/kit';
+import { adoptions, cats, colonies } from '$lib/server/db/schema.js';
+import { desc, eq, and } from 'drizzle-orm';
+import { fail } from '@sveltejs/kit';
 import { notify } from '$lib/server/notifications.js';
+import { audit } from '$lib/server/audit.js';
+import { requireAuthContext, getFormField, getFormBool, requireField, requireFields } from '$lib/server/action-helpers.js';
+import { orgScope, verifyOrgOwnership } from '$lib/server/tenant.js';
+import { guardedUpdate, guardedDelete, guardedInsert } from '$lib/server/db-helpers.js';
+import { parsePagination, paginateWithCount } from '$lib/server/pagination.js';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) throw redirect(302, '/login');
+export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
+	const pagination = parsePagination(url);
 
-	const allAdoptions = await db
-		.select({
-			id: adoptions.id,
-			catId: adoptions.catId,
-			catName: cats.name,
-			colonyName: colonies.name,
-			adopterInfo: adoptions.adopterInfo,
-			consent: adoptions.consent,
-			status: adoptions.status,
-			adoptedAt: adoptions.adoptedAt,
-			documents: adoptions.documents,
-			createdAt: adoptions.createdAt
-		})
+	const whereAdoptions = orgScope(adoptions.organizationId, orgId);
+
+	const baseSelect = db.select({
+		id: adoptions.id,
+		catId: adoptions.catId,
+		catName: cats.name,
+		colonyName: colonies.name,
+		adopterInfo: adoptions.adopterInfo,
+		consent: adoptions.consent,
+		status: adoptions.status,
+		adoptedAt: adoptions.adoptedAt,
+		documents: adoptions.documents,
+		createdAt: adoptions.createdAt
+	})
 		.from(adoptions)
 		.leftJoin(cats, eq(adoptions.catId, cats.id))
 		.leftJoin(colonies, eq(cats.colonyId, colonies.id))
-		.orderBy(desc(adoptions.createdAt));
+		.where(whereAdoptions)
+		.orderBy(desc(adoptions.createdAt))
+		.$dynamic();
 
-	const availableCats = await db
-		.select({ id: cats.id, name: cats.name, colonyName: colonies.name })
-		.from(cats)
-		.leftJoin(colonies, eq(cats.colonyId, colonies.id))
-		.where(eq(cats.status, 'in_colony'))
-		.orderBy(cats.name);
+	const [paginated, availableCats] = await Promise.all([
+		paginateWithCount(baseSelect, adoptions, whereAdoptions, pagination),
+		db.select({ id: cats.id, name: cats.name, colonyName: colonies.name })
+			.from(cats)
+			.leftJoin(colonies, eq(cats.colonyId, colonies.id))
+			.where(and(eq(cats.status, 'in_colony'), orgScope(cats.organizationId, orgId)))
+			.orderBy(cats.name)
+	]);
 
 	return {
 		locale: locals.locale,
-		adoptions: allAdoptions,
+		...paginated,
 		availableCats
 	};
 };
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
 
-		const catId = fd.get('catId') as string;
-		const adopterName = fd.get('adopterName') as string;
-		const adopterPhone = fd.get('adopterPhone') as string;
-		const adopterEmail = fd.get('adopterEmail') as string;
-		const adopterAddress = fd.get('adopterAddress') as string;
-		const adopterDocument = fd.get('adopterDocument') as string;
-		const consentSigned = fd.get('consentSigned') === 'on';
+		const { catId, adopterName } = requireFields(fd, {
+			catId: 'El gato', adopterName: 'El nombre del adoptante'
+		});
 
-		if (!catId || !adopterName) {
-			return fail(400, { error: 'Gato y nombre del adoptante son obligatorios' });
+		if (!await verifyOrgOwnership(cats, catId, ctx.organizationId)) {
+			return fail(404, { error: 'Gato no encontrado' });
 		}
 
-		const [adoption] = await db.insert(adoptions).values({
+		const adopterPhone = getFormField(fd, 'adopterPhone');
+		const adopterEmail = getFormField(fd, 'adopterEmail');
+		const adopterAddress = getFormField(fd, 'adopterAddress');
+		const adopterDocument = getFormField(fd, 'adopterDocument');
+		const consentSigned = getFormBool(fd, 'consentSigned');
+
+		await guardedInsert(adoptions, {
+			organizationId: ctx.organizationId,
 			catId,
 			adopterInfo: {
 				name: adopterName,
@@ -68,91 +82,71 @@ export const actions: Actions = {
 			},
 			consent: { signed: consentSigned, signedAt: consentSigned ? new Date().toISOString() : null },
 			status: 'pending'
-		}).returning();
-
-		await db.insert(auditLogs).values({
-			userId: locals.user.id,
-			entity: 'adoption',
-			entityId: adoption.id,
-			action: 'create',
-			details: { catId, adopterName }
-		});
+		}, ctx, 'adoption', 'create', { catId, adopterName });
 
 		return { success: true };
 	},
-	updateStatus: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
-		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const status = fd.get('status') as string;
 
-		if (!id || !status) return fail(400, { error: 'Datos incompletos' });
+	updateStatus: async ({ request, locals }) => {
+		const ctx = requireAuthContext(locals, request);
+		const fd = await request.formData();
+		const { id, status } = requireFields(fd, { id: 'El ID', status: 'El estado' });
 
 		const updates: Record<string, unknown> = { status };
-		if (status === 'completed') {
-			updates.adoptedAt = new Date();
-		}
+		if (status === 'completed') updates.adoptedAt = new Date();
 
-		await db.update(adoptions).set(updates).where(eq(adoptions.id, id));
+		const changed = await db.transaction(async (tx) => {
+			const rows = await tx.update(adoptions).set(updates).where(and(eq(adoptions.id, id), orgScope(adoptions.organizationId, ctx.organizationId))).returning({ id: adoptions.id, catId: adoptions.catId });
 
-		if (status === 'completed') {
-			const [adoption] = await db.select().from(adoptions).where(eq(adoptions.id, id));
-			if (adoption) {
-				await db.update(cats).set({ status: 'adopted' }).where(eq(cats.id, adoption.catId));
+			const firstRow = rows[0];
+			if (firstRow && status === 'completed') {
+				await tx.update(cats).set({ status: 'adopted' }).where(and(eq(cats.id, firstRow.catId), orgScope(cats.organizationId, ctx.organizationId)));
 			}
-		}
 
-		await db.insert(auditLogs).values({
-			userId: locals.user.id,
-			entity: 'adoption',
-			entityId: id,
-			action: 'update_status',
-			details: { status }
+			return rows;
 		});
 
-		const statusLabels: Record<string, string> = { pending: 'Pendiente', approved: 'Aprobada', completed: 'Completada', rejected: 'Rechazada' };
-		await notify({ type: 'adoption_status', title: 'Adopción actualizada', message: `Una adopción ha cambiado a estado: ${statusLabels[status] || status}`, payload: { adoptionId: id, status } });
+		if (changed.length > 0) {
+			await audit(ctx, 'adoption', id, 'update_status', { status });
+			const statusLabels: Record<string, string> = { pending: 'Pendiente', approved: 'Aprobada', completed: 'Completada', rejected: 'Rechazada' };
+			await notify({ organizationId: ctx.organizationId, type: 'adoption_status', title: 'Adopción actualizada', message: `Una adopción ha cambiado a estado: ${statusLabels[status] || status}`, payload: { adoptionId: id, status } });
+		}
 
 		return { success: true };
 	},
 
 	edit: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const adopterName = fd.get('adopterName') as string;
-		const adopterPhone = fd.get('adopterPhone') as string;
-		const adopterEmail = fd.get('adopterEmail') as string;
+		const id = requireField(fd, 'id', 'El ID');
 
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const adopterName = getFormField(fd, 'adopterName');
+		const adopterPhone = getFormField(fd, 'adopterPhone');
+		const adopterEmail = getFormField(fd, 'adopterEmail');
 
-		const [current] = await db.select().from(adoptions).where(eq(adoptions.id, id));
+		const tenantWhere = and(eq(adoptions.id, id), orgScope(adoptions.organizationId, ctx.organizationId));
+		const [current] = await db.select().from(adoptions).where(tenantWhere);
 		if (!current) return fail(404, { error: 'No encontrado' });
 
-		const adopterInfo = (current.adopterInfo as Record<string, unknown>) ?? {};
+		const adopterInfo: Record<string, unknown> = (typeof current.adopterInfo === 'object' && current.adopterInfo !== null)
+			? { ...current.adopterInfo as object }
+			: {};
 		if (adopterName) adopterInfo.name = adopterName;
-		if (adopterPhone !== undefined) adopterInfo.phone = adopterPhone || null;
-		if (adopterEmail !== undefined) adopterInfo.email = adopterEmail || null;
+		adopterInfo.phone = adopterPhone || null;
+		adopterInfo.email = adopterEmail || null;
 
-		await db.update(adoptions).set({ adopterInfo }).where(eq(adoptions.id, id));
-		await db.insert(auditLogs).values({ userId: locals.user.id, entity: 'adoption', entityId: id, action: 'update', details: { adopterName } });
+		await guardedUpdate(adoptions, { adopterInfo }, tenantWhere,
+			ctx, 'adoption', id, 'update', { adopterName });
 		return { edited: true };
 	},
 
 	delete: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const id = requireField(fd, 'id', 'El ID');
 
-		await db.delete(adoptions).where(eq(adoptions.id, id));
-		await db.insert(auditLogs).values({
-			userId: locals.user.id,
-			entity: 'adoption',
-			entityId: id,
-			action: 'delete',
-			details: {}
-		});
+		await guardedDelete(adoptions, and(eq(adoptions.id, id), orgScope(adoptions.organizationId, ctx.organizationId)),
+			ctx, 'adoption', id, 'delete');
 		return { deleted: true };
 	}
 };

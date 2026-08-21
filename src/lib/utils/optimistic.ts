@@ -16,7 +16,7 @@ export function optimisticEnhance(options: {
 				options.onSuccess?.();
 				if (options.resetOnSuccess !== false) await update();
 			} else if (result.type === 'failure' || result.type === 'error') {
-				const msg = result.data?.error as string ?? 'Error inesperado';
+				const msg = typeof result.data?.error === 'string' ? result.data.error : 'Error inesperado';
 				options.onError?.(msg);
 				await update();
 			} else {

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
+	import { computeRate } from '$lib/index.js';
 	import type { PageData, ActionData } from './$types.js';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
@@ -39,7 +41,7 @@
 			}
 		}
 		if (maxScore === 0) return null;
-		const pct = Math.round((total / maxScore) * 100);
+		const pct = computeRate(total, maxScore);
 		return { total, maxScore, pct };
 	});
 
@@ -76,7 +78,7 @@
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
 			<h1 class="text-2xl font-bold text-text tracking-tight">{t(locale, 'inspections.title')}</h1>
-			<p class="text-sm text-text-muted mt-0.5">{data.inspections.length} {t(locale, 'inspections.registered')}</p>
+			<p class="text-sm text-text-muted mt-0.5">{data.totalItems} {t(locale, 'inspections.registered')}</p>
 		</div>
 		<button onclick={() => { showNewForm = !showNewForm; showTemplateForm = false; }}
 			class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors shadow-sm">
@@ -196,7 +198,7 @@
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-border">
-						{#each data.inspections as insp}
+						{#each data.items as insp}
 							{@const inspScore = typeof insp.score === 'number' ? insp.score : null}
 							<tr class="hover:bg-surface-sunken/50 transition-colors">
 								<td class="px-4 py-3 font-medium">
@@ -259,30 +261,30 @@
 									<td colspan="7" class="px-4 py-3">
 										<form method="POST" action="?/edit" use:enhance class="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
 											<input type="hidden" name="id" value={insp.id} />
-											<div>
-												<label class="text-[10px] text-text-muted uppercase">{t(locale, 'inspections.colony')}</label>
+											<label class="block">
+												<span class="text-[10px] text-text-muted uppercase">{t(locale, 'inspections.colony')}</span>
 												<select name="colonyId" class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs">
 													{#each data.colonies as col}
 														<option value={col.id} selected={col.id === insp.colonyId}>{col.name}</option>
 													{/each}
 												</select>
-											</div>
-											<div>
-												<label class="text-[10px] text-text-muted uppercase">{t(locale, 'inspections.score')}</label>
+											</label>
+											<label class="block">
+												<span class="text-[10px] text-text-muted uppercase">{t(locale, 'inspections.score')}</span>
 												<input type="number" name="score" value={insp.score ?? ''} min="0" max="100" class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-											</div>
-											<div>
-												<label class="text-[10px] text-text-muted uppercase">{t(locale, 'inspections.result')}</label>
+											</label>
+											<label class="block">
+												<span class="text-[10px] text-text-muted uppercase">{t(locale, 'inspections.result')}</span>
 												<select name="passed" class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs">
 													<option value="">-</option>
 													<option value="true" selected={insp.passed === true}>{t(locale, 'inspections.approved')}</option>
 													<option value="false" selected={insp.passed === false}>{t(locale, 'inspections.not_approved')}</option>
 												</select>
-											</div>
-											<div>
-												<label class="text-[10px] text-text-muted uppercase">{t(locale, 'inspections.notes_col')}</label>
+											</label>
+											<label class="block">
+												<span class="text-[10px] text-text-muted uppercase">{t(locale, 'inspections.notes_col')}</span>
 												<input type="text" name="notes" value={insp.notes ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-											</div>
+											</label>
 											<div class="flex gap-1">
 												<button type="submit" class="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover transition-colors">{t(locale, 'common.save')}</button>
 												<button type="button" onclick={() => editingInspection = null} class="px-3 py-1.5 bg-surface-sunken text-text-secondary rounded-lg text-xs font-medium hover:bg-border transition-colors">{t(locale, 'common.cancel')}</button>
@@ -292,7 +294,7 @@
 								</tr>
 							{/if}
 						{/each}
-						{#if data.inspections.length === 0}
+						{#if data.items.length === 0}
 							<tr><td colspan="5" class="px-4 py-12 text-center text-text-muted">{t(locale, 'common.no_results')}</td></tr>
 						{/if}
 					</tbody>
@@ -335,35 +337,39 @@
 							{#each templateFields as field, i}
 								<div class="bg-surface rounded-lg border border-border p-3">
 									<div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
-										<div class="sm:col-span-4">
-											<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.field_name')}</label>
+										<label class="block sm:col-span-4">
+											<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.field_name')}</span>
 											<input type="text" bind:value={field.label} placeholder={t(locale, 'inspections.general_status')} class="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
-										</div>
-										<div class="sm:col-span-2">
-											<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.field_type')}</label>
+										</label>
+										<label class="block sm:col-span-2">
+											<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.field_type')}</span>
 											<select bind:value={field.type} class="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
 												<option value="select">{t(locale, 'inspections.type_select')}</option>
 												<option value="number">{t(locale, 'inspections.type_number')}</option>
 												<option value="text">{t(locale, 'inspections.type_text')}</option>
 												<option value="boolean">{t(locale, 'inspections.type_boolean')}</option>
 											</select>
-										</div>
+										</label>
 										<div class="sm:col-span-4">
 											{#if field.type === 'select'}
-												<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.options_hint')}</label>
-												<input type="text" value={field.options.join(', ')} oninput={(e) => { field.options = (e.currentTarget as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean) }} class="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
+												<label class="block">
+													<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.options_hint')}</span>
+													<input type="text" value={field.options.join(', ')} oninput={(e) => { if (e.currentTarget instanceof HTMLInputElement) field.options = e.currentTarget.value.split(',').map(s => s.trim()).filter(Boolean); }} class="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
+												</label>
 											{:else if field.type === 'boolean'}
-												<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.field_options')}</label>
+												<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.field_options')}</span>
 												<p class="text-xs text-text-muted py-1.5">{t(locale, 'inspections.auto_options')}</p>
 											{:else}
-												<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.placeholder')}</label>
-												<input type="text" placeholder={t(locale, 'inspections.placeholder_hint')} class="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
+												<label class="block">
+													<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.placeholder')}</span>
+													<input type="text" placeholder={t(locale, 'inspections.placeholder_hint')} class="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
+												</label>
 											{/if}
 										</div>
-										<div class="sm:col-span-1">
-											<label class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.field_weight')}</label>
+										<label class="block sm:col-span-1">
+											<span class="block text-[11px] font-medium text-text-muted mb-1">{t(locale, 'inspections.field_weight')}</span>
 											<input type="number" bind:value={field.weight} min="0" max="100" class="w-full px-2 py-1.5 bg-background border border-border rounded-md text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
-										</div>
+										</label>
 										<div class="sm:col-span-1 flex justify-center">
 											<button type="button" onclick={() => templateFields = templateFields.filter((_, j) => j !== i)} class="p-1.5 text-danger/60 hover:text-danger hover:bg-danger/10 rounded-md transition-colors" title={t(locale, 'inspections.delete_field')}>
 												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -432,4 +438,6 @@
 			{/if}
 		</div>
 	{/if}
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

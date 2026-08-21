@@ -20,7 +20,6 @@
 		onSort,
 		onSelect,
 		onSelectAll,
-		rowHref,
 		emptyMessage = 'Sin datos',
 		row,
 		bulkActions
@@ -34,11 +33,14 @@
 		onSort?: (key: string) => void;
 		onSelect?: (id: string) => void;
 		onSelectAll?: () => void;
-		rowHref?: (item: Record<string, unknown>) => string;
 		emptyMessage?: string;
 		row: Snippet<[Record<string, unknown>]>;
 		bulkActions?: Snippet;
 	} = $props();
+
+	function itemId(item: Record<string, unknown>): string {
+		return typeof item.id === 'string' ? item.id : String(item.id ?? '');
+	}
 
 	let allSelected = $derived(data.length > 0 && selectedIds.length === data.length);
 </script>
@@ -97,13 +99,13 @@
 					</tr>
 				{:else}
 					{#each data as item}
-						<tr class="hover:bg-surface-sunken/50 transition-colors {selectedIds.includes(item.id as string) ? 'bg-primary/[0.03]' : ''}">
-							{#if selectable}
-								<td class="px-4 py-3 w-10">
-									<input
-										type="checkbox"
-										checked={selectedIds.includes(item.id as string)}
-										onchange={() => onSelect?.(item.id as string)}
+					<tr class="hover:bg-surface-sunken/50 transition-colors {selectedIds.includes(itemId(item)) ? 'bg-primary/[0.03]' : ''}">
+						{#if selectable}
+							<td class="px-4 py-3 w-10">
+								<input
+									type="checkbox"
+									checked={selectedIds.includes(itemId(item))}
+									onchange={() => onSelect?.(itemId(item))}
 										class="w-3.5 h-3.5 rounded border-border accent-primary cursor-pointer"
 									/>
 								</td>

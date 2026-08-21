@@ -19,8 +19,9 @@
 		$effect(() => {
 			if (!containerEl) return;
 			const observer = new IntersectionObserver(
-				([entry]) => {
-					if (entry.isIntersecting) {
+				(entries) => {
+					const entry = entries[0];
+					if (entry?.isIntersecting) {
 						visible = true;
 						observer.disconnect();
 					}

@@ -1,30 +1,5 @@
 import { describe, it, expect } from 'vitest';
-
-interface PushPayload {
-	title: string;
-	body: string;
-	icon?: string;
-	url?: string;
-	tag?: string;
-}
-
-function buildPushPayload(payload: PushPayload): string {
-	return JSON.stringify({
-		title: payload.title,
-		body: payload.body,
-		icon: payload.icon || '/icon-192.png',
-		data: { url: payload.url || '/dashboard' },
-		tag: payload.tag
-	});
-}
-
-function shouldDeleteSubscription(statusCode: number): boolean {
-	return statusCode === 410 || statusCode === 404;
-}
-
-function shouldFallbackToEmail(sent: number): boolean {
-	return sent === 0;
-}
+import { buildPushPayload, shouldDeleteSubscription, extractStatusCode } from '../../src/lib/server/push-notify.js';
 
 describe('Push notification payload builder', () => {
 	it('builds JSON with title and body', () => {
@@ -77,13 +52,28 @@ describe('Subscription cleanup logic', () => {
 	});
 });
 
-describe('Email fallback logic', () => {
-	it('falls back when 0 sent', () => {
-		expect(shouldFallbackToEmail(0)).toBe(true);
+describe('extractStatusCode', () => {
+	it('extracts numeric statusCode from error-like object', () => {
+		expect(extractStatusCode({ statusCode: 410, message: 'Gone' })).toBe(410);
 	});
 
-	it('does not fall back when any sent', () => {
-		expect(shouldFallbackToEmail(1)).toBe(false);
-		expect(shouldFallbackToEmail(5)).toBe(false);
+	it('returns undefined for null', () => {
+		expect(extractStatusCode(null)).toBeUndefined();
+	});
+
+	it('returns undefined for string error', () => {
+		expect(extractStatusCode('network error')).toBeUndefined();
+	});
+
+	it('returns undefined when statusCode is a string', () => {
+		expect(extractStatusCode({ statusCode: '404' })).toBeUndefined();
+	});
+
+	it('returns undefined for objects without statusCode', () => {
+		expect(extractStatusCode({ code: 'ECONNRESET' })).toBeUndefined();
+	});
+
+	it('returns undefined for undefined', () => {
+		expect(extractStatusCode(undefined)).toBeUndefined();
 	});
 });

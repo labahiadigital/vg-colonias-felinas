@@ -18,7 +18,8 @@
 		muted: { dot: 'bg-text-muted', bg: 'bg-surface-sunken text-text-muted' }
 	};
 
-	let style = $derived(config[status] ?? config.default);
+	const defaultStyle = { dot: 'bg-primary', bg: 'bg-primary/8 text-primary' };
+	let style = $derived(config[status] ?? defaultStyle);
 </script>
 
 <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium {style.bg}">

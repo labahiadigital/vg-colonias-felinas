@@ -17,8 +17,9 @@
 	let open = $state(false);
 	let unreadCount = $derived(notifications.filter(n => !n.read).length);
 
+	const defaultIcon = { path: 'M12 16v-4m0-4h.01M22 12a10 10 0 11-20 0 10 10 0 0120 0z', color: 'text-info bg-info/8' };
 	const typeIcons: Record<string, { path: string; color: string }> = {
-		info: { path: 'M12 16v-4m0-4h.01M22 12a10 10 0 11-20 0 10 10 0 0120 0z', color: 'text-info bg-info/8' },
+		info: defaultIcon,
 		warning: { path: 'M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4m0 4h.01', color: 'text-warning bg-warning/8' },
 		success: { path: 'M22 12a10 10 0 11-20 0 10 10 0 0120 0zM9 12l2 2 4-4', color: 'text-success bg-success/8' },
 		danger: { path: 'M22 12a10 10 0 11-20 0 10 10 0 0120 0zM15 9l-6 6m0-6l6 6', color: 'text-danger bg-danger/8' }
@@ -70,7 +71,7 @@
 					</div>
 				{:else}
 					{#each notifications as notif}
-						{@const icon = typeIcons[notif.type] ?? typeIcons.info}
+						{@const icon = typeIcons[notif.type] ?? defaultIcon}
 						<div class="px-4 py-3 hover:bg-surface-sunken transition-colors border-b border-border last:border-0 {!notif.read ? 'bg-primary/[0.02]' : ''}">
 							<div class="flex gap-3">
 								<div class="w-8 h-8 rounded-lg {icon.color} flex items-center justify-center flex-shrink-0 mt-0.5">

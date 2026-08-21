@@ -27,13 +27,17 @@
 	let offset = $derived(swiping ? currentX - startX : 0);
 
 	function handleTouchStart(e: TouchEvent) {
-		startX = e.touches[0].clientX;
+		const touch = e.touches[0];
+		if (!touch) return;
+		startX = touch.clientX;
 		swiping = true;
 	}
 
 	function handleTouchMove(e: TouchEvent) {
 		if (!swiping) return;
-		currentX = e.touches[0].clientX;
+		const touch = e.touches[0];
+		if (!touch) return;
+		currentX = touch.clientX;
 	}
 
 	function handleTouchEnd() {
@@ -65,6 +69,7 @@
 		ontouchmove={handleTouchMove}
 		ontouchend={handleTouchEnd}
 		role="row"
+		tabindex="0"
 	>
 		{@render children()}
 	</div>

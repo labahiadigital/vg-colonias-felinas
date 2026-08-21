@@ -1,132 +1,129 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { visits, colonies, users, collaborators, volunteerHours } from '$lib/server/db/schema.js';
+import { visits, colonies, users, volunteerHours } from '$lib/server/db/schema.js';
 import { eq, desc, and, sql, gte, lte } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
-import { logAudit } from '$lib/server/audit.js';
+import { requireAuthContext, getFormField, getFormInt, getFormNumber, getFormBool, requireField } from '$lib/server/action-helpers.js';
+import { orgScope, verifyOrgOwnership, buildWhere, loadOrgColonies } from '$lib/server/tenant.js';
+import { guardedUpdate, guardedDelete, guardedInsert } from '$lib/server/db-helpers.js';
+import { parsePagination, paginateWithCount } from '$lib/server/pagination.js';
+import { toDateString } from '$lib/index.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
+	const pagination = parsePagination(url);
 	const colonyFilter = url.searchParams.get('colony') ?? '';
 	const typeFilter = url.searchParams.get('type') ?? '';
 	const from = url.searchParams.get('from') ?? '';
 	const to = url.searchParams.get('to') ?? '';
 
-	const conditions = [];
-	if (colonyFilter) conditions.push(eq(visits.colonyId, colonyFilter));
-	if (typeFilter) conditions.push(eq(visits.type, typeFilter));
-	if (from) conditions.push(gte(visits.visitedAt, new Date(from)));
-	if (to) conditions.push(lte(visits.visitedAt, new Date(to)));
+	const whereClause = buildWhere(
+		orgScope(visits.organizationId, orgId),
+		colonyFilter && eq(visits.colonyId, colonyFilter),
+		typeFilter && eq(visits.type, typeFilter),
+		from && gte(visits.visitedAt, new Date(from)),
+		to && lte(visits.visitedAt, new Date(to))
+	);
 
-	const allVisits = await db
-		.select({
-			id: visits.id,
-			colonyId: visits.colonyId,
-			type: visits.type,
-			latitude: visits.latitude,
-			longitude: visits.longitude,
-			durationMinutes: visits.durationMinutes,
-			notes: visits.notes,
-			catsObserved: visits.catsObserved,
-			foodProvided: visits.foodProvided,
-			waterProvided: visits.waterProvided,
-			foodQuantityKg: visits.foodQuantityKg,
-			foodType: visits.foodType,
-			waterQuantityL: visits.waterQuantityL,
-			feedingCostEur: visits.feedingCostEur,
-			specialNeeds: visits.specialNeeds,
-			incidentDetected: visits.incidentDetected,
-			visitedAt: visits.visitedAt,
-			colonyName: colonies.name,
-			userName: users.name
-		})
+	const baseSelect = db.select({
+		id: visits.id,
+		colonyId: visits.colonyId,
+		type: visits.type,
+		latitude: visits.latitude,
+		longitude: visits.longitude,
+		durationMinutes: visits.durationMinutes,
+		notes: visits.notes,
+		catsObserved: visits.catsObserved,
+		foodProvided: visits.foodProvided,
+		waterProvided: visits.waterProvided,
+		foodQuantityKg: visits.foodQuantityKg,
+		foodType: visits.foodType,
+		waterQuantityL: visits.waterQuantityL,
+		feedingCostEur: visits.feedingCostEur,
+		specialNeeds: visits.specialNeeds,
+		incidentDetected: visits.incidentDetected,
+		visitedAt: visits.visitedAt,
+		colonyName: colonies.name,
+		userName: users.name
+	})
 		.from(visits)
 		.leftJoin(colonies, eq(visits.colonyId, colonies.id))
 		.leftJoin(users, eq(visits.userId, users.id))
-		.where(conditions.length > 0 ? and(...conditions) : undefined)
+		.where(whereClause)
 		.orderBy(desc(visits.visitedAt))
-		.limit(100);
+		.$dynamic();
 
-	const allColonies = await db.select({ id: colonies.id, name: colonies.name }).from(colonies);
-
-	const totalHoursResult = await db
-		.select({ total: sql<number>`coalesce(sum(${volunteerHours.hours}), 0)` })
-		.from(volunteerHours);
-	const totalVolunteerHours = totalHoursResult[0]?.total ?? 0;
-
-	const totalVisitsCount = await db
-		.select({ count: sql<number>`count(*)` })
-		.from(visits);
+	const [paginated, allColonies, totalHoursResult] = await Promise.all([
+		paginateWithCount(baseSelect, visits, whereClause, pagination),
+		loadOrgColonies(orgId),
+		db.select({ total: sql<number>`coalesce(sum(${volunteerHours.hours}), 0)` }).from(volunteerHours).where(orgScope(volunteerHours.organizationId, orgId))
+	]);
 
 	return {
 		locale: locals.locale,
-		visits: allVisits,
+		...paginated,
 		colonies: allColonies,
-		totalVolunteerHours,
-		totalVisits: totalVisitsCount[0]?.count ?? 0,
+		totalVolunteerHours: totalHoursResult[0]?.total ?? 0,
+		totalVisits: paginated.totalItems,
 		filters: { colony: colonyFilter, type: typeFilter, from, to }
 	};
 };
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
 
-		const colonyId = fd.get('colonyId') as string;
-		const type = fd.get('type') as string;
-		const durationMinutes = parseInt(fd.get('durationMinutes') as string);
-		const notes = fd.get('notes') as string;
-		const catsObserved = parseInt(fd.get('catsObserved') as string);
-		const latitude = parseFloat(fd.get('latitude') as string);
-		const longitude = parseFloat(fd.get('longitude') as string);
-		const foodProvided = fd.get('foodProvided') === 'on';
-		const waterProvided = fd.get('waterProvided') === 'on';
-		const incidentDetected = fd.get('incidentDetected') === 'on';
-		const foodQuantityKg = parseFloat(fd.get('foodQuantityKg') as string);
-		const foodType = fd.get('foodType') as string;
-		const waterQuantityL = parseFloat(fd.get('waterQuantityL') as string);
-		const feedingCostEur = parseFloat(fd.get('feedingCostEur') as string);
-		const specialNeeds = fd.get('specialNeeds') as string;
+		const colonyId = requireField(fd, 'colonyId', 'La colonia');
 
-		if (!colonyId) return fail(400, { error: 'La colonia es obligatoria' });
-
-		const result = await db.insert(visits).values({
-			colonyId,
-			userId: locals.user.id,
-			type: type || 'feeding',
-			durationMinutes: isNaN(durationMinutes) ? null : durationMinutes,
-			notes: notes || null,
-			catsObserved: isNaN(catsObserved) ? null : catsObserved,
-			latitude: isNaN(latitude) ? null : latitude,
-			longitude: isNaN(longitude) ? null : longitude,
-			foodProvided,
-			waterProvided,
-			foodQuantityKg: isNaN(foodQuantityKg) ? null : foodQuantityKg,
-			foodType: foodType || null,
-			waterQuantityL: isNaN(waterQuantityL) ? null : waterQuantityL,
-			feedingCostEur: isNaN(feedingCostEur) ? null : feedingCostEur,
-			specialNeeds: specialNeeds || null,
-			incidentDetected
-		}).returning();
-
-		if (result[0] && !isNaN(durationMinutes) && durationMinutes > 0) {
-			await db.insert(volunteerHours).values({
-				userId: locals.user.id,
-				colonyId,
-				visitId: result[0].id,
-				hours: durationMinutes / 60,
-				activityType: type || 'feeding',
-				date: new Date().toISOString().split('T')[0]
-			});
+		if (!await verifyOrgOwnership(colonies, colonyId, ctx.organizationId)) {
+			return fail(404, { error: 'Colonia no encontrada' });
 		}
 
-		if (result[0]) {
-			await logAudit({
-				userId: locals.user.id,
-				entity: 'visit',
-				entityId: result[0].id,
-				action: 'create',
-				details: { colonyId, type, durationMinutes }
+		const type = getFormField(fd, 'type') || 'feeding';
+		const durationMinutes = getFormInt(fd, 'durationMinutes');
+		const notes = getFormField(fd, 'notes');
+		const catsObserved = getFormInt(fd, 'catsObserved');
+		const latitude = getFormNumber(fd, 'latitude');
+		const longitude = getFormNumber(fd, 'longitude');
+		const foodProvided = getFormBool(fd, 'foodProvided');
+		const waterProvided = getFormBool(fd, 'waterProvided');
+		const incidentDetected = getFormBool(fd, 'incidentDetected');
+		const foodQuantityKg = getFormNumber(fd, 'foodQuantityKg');
+		const foodType = getFormField(fd, 'foodType');
+		const waterQuantityL = getFormNumber(fd, 'waterQuantityL');
+		const feedingCostEur = getFormNumber(fd, 'feedingCostEur');
+		const specialNeeds = getFormField(fd, 'specialNeeds');
+
+		const visitId = await guardedInsert(visits, {
+			organizationId: ctx.organizationId,
+			colonyId,
+			userId: ctx.userId,
+			type,
+			durationMinutes,
+			notes: notes || null,
+			catsObserved,
+			latitude,
+			longitude,
+			foodProvided,
+			waterProvided,
+			foodQuantityKg,
+			foodType: foodType || null,
+			waterQuantityL,
+			feedingCostEur,
+			specialNeeds: specialNeeds || null,
+			incidentDetected
+		}, ctx, 'visit', 'create', { colonyId, type, durationMinutes });
+
+		if (durationMinutes && durationMinutes > 0) {
+			await db.insert(volunteerHours).values({
+				organizationId: ctx.organizationId,
+				userId: ctx.userId,
+				colonyId,
+				visitId,
+				hours: durationMinutes / 60,
+				activityType: type,
+				date: toDateString()
 			});
 		}
 
@@ -134,37 +131,32 @@ export const actions: Actions = {
 	},
 
 	edit: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const colonyId = fd.get('colonyId') as string;
-		const type = fd.get('type') as string;
-		const durationMinutes = parseInt(fd.get('durationMinutes') as string);
-		const notes = fd.get('notes') as string;
-		const catsObserved = parseInt(fd.get('catsObserved') as string);
+		const id = requireField(fd, 'id', 'El ID');
 
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const colonyId = getFormField(fd, 'colonyId');
+		const type = getFormField(fd, 'type');
+		const durationMinutes = getFormInt(fd, 'durationMinutes');
+		const notes = getFormField(fd, 'notes');
+		const catsObserved = getFormInt(fd, 'catsObserved');
 
-		await db.update(visits).set({
-			...(colonyId && { colonyId }),
-			...(type && { type }),
-			durationMinutes: isNaN(durationMinutes) ? undefined : durationMinutes,
-			notes: notes || null,
-			catsObserved: isNaN(catsObserved) ? undefined : catsObserved
-		}).where(eq(visits.id, id));
-
-		await logAudit({ userId: locals.user.id, entity: 'visit', entityId: id, action: 'update', details: { colonyId, type } });
+		await guardedUpdate(visits, {
+			...(colonyId && { colonyId }), ...(type && { type }),
+			...(durationMinutes !== null && { durationMinutes }), notes: notes || null,
+			...(catsObserved !== null && { catsObserved })
+		}, and(eq(visits.id, id), orgScope(visits.organizationId, ctx.organizationId)),
+			ctx, 'visit', id, 'update', { colonyId, type });
 		return { edited: true };
 	},
 
 	delete: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const id = requireField(fd, 'id', 'El ID');
 
-		await db.delete(visits).where(eq(visits.id, id));
-		await logAudit({ userId: locals.user.id, entity: 'visit', entityId: id, action: 'delete', details: {} });
+		await guardedDelete(visits, and(eq(visits.id, id), orgScope(visits.organizationId, ctx.organizationId)),
+			ctx, 'visit', id, 'delete');
 		return { deleted: true };
 	}
 };

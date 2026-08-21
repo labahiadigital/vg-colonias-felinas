@@ -2,6 +2,8 @@
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types.js';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
+	import { toDateString } from '$lib/index.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
@@ -30,7 +32,7 @@
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
 			<h1 class="text-2xl font-bold text-text tracking-tight">{t(locale, 'health.title')}</h1>
-			<p class="text-sm text-text-muted mt-0.5">{data.records.length} {t(locale, 'health.records_count')}</p>
+			<p class="text-sm text-text-muted mt-0.5">{data.totalItems} {t(locale, 'health.records_count')}</p>
 		</div>
 		<button onclick={() => showNewForm = !showNewForm}
 			class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors shadow-sm">
@@ -127,7 +129,7 @@
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-border">
-					{#each data.records as r}
+					{#each data.items as r}
 						<tr class="hover:bg-surface-sunken/50 transition-colors">
 							<td class="px-4 py-3 font-medium">
 								<a href="/gatos/{r.catId}" class="text-primary hover:text-primary-hover transition-colors">{r.catName || t(locale, 'health.no_name')}</a>
@@ -159,30 +161,30 @@
 								<td colspan="8" class="px-4 py-3">
 									<form method="POST" action="?/edit" use:enhance class="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end">
 										<input type="hidden" name="id" value={r.id} />
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'health.type')}</label>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'health.type')}</span>
 											<select name="type" class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs">
 												{#each healthTypes as ht}
 													<option value={ht} selected={r.type === ht}>{typeLabel(ht)}</option>
 												{/each}
 											</select>
-										</div>
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'health.date')}</label>
-											<input type="date" name="performedAt" value={r.performedAt ? new Date(r.performedAt).toISOString().split('T')[0] : ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-										</div>
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'health.vet')}</label>
+										</label>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'health.date')}</span>
+											<input type="date" name="performedAt" value={r.performedAt ? toDateString(new Date(r.performedAt)) : ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
+										</label>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'health.vet')}</span>
 											<input type="text" name="vetName" value={r.vetName ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-										</div>
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'health.clinic')}</label>
+										</label>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'health.clinic')}</span>
 											<input type="text" name="vetClinic" value={r.vetClinic ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-										</div>
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'health.notes')}</label>
+										</label>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'health.notes')}</span>
 											<input type="text" name="notes" value={r.notes ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-										</div>
+										</label>
 										<div class="flex gap-1">
 											<button type="submit" class="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover transition-colors">{t(locale, 'common.save')}</button>
 											<button type="button" onclick={() => editingRecord = null} class="px-3 py-1.5 bg-surface-sunken text-text-secondary rounded-lg text-xs font-medium hover:bg-border transition-colors">{t(locale, 'common.cancel')}</button>
@@ -192,11 +194,12 @@
 							</tr>
 						{/if}
 					{/each}
-					{#if data.records.length === 0}
+					{#if data.items.length === 0}
 						<tr><td colspan="8" class="px-4 py-12 text-center text-text-muted">{t(locale, 'common.no_results')}</td></tr>
 					{/if}
 				</tbody>
 			</table>
 		</div>
+		<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 	</div>
 </div>

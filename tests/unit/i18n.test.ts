@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { t, getLocale, locales, localeNames } from '../../src/lib/i18n/index.js';
+import { t, getLocale, isLocale, locales, localeNames } from '../../src/lib/i18n/index.js';
 
 describe('t function', () => {
 	it('returns Spanish translation for known key', () => {
@@ -12,7 +12,7 @@ describe('t function', () => {
 
 	it('falls back to Spanish when key not in target locale', () => {
 		const result = t('pt', 'dashboard.recent_activity');
-		expect(result).toBe('Atividade recente');
+		expect(result).toBe('Atividade Recente');
 	});
 
 	it('returns key when not found in any locale', () => {
@@ -83,5 +83,41 @@ describe('localeNames', () => {
 		expect(localeNames.es).toBe('Castellano');
 		expect(localeNames.fr).toBe('Français');
 		expect(localeNames.pt).toBe('Português');
+	});
+});
+
+describe('isLocale type guard', () => {
+	it('returns true for valid locales', () => {
+		for (const loc of locales) {
+			expect(isLocale(loc)).toBe(true);
+		}
+	});
+
+	it('returns false for invalid strings', () => {
+		expect(isLocale('zz')).toBe(false);
+		expect(isLocale('invalid')).toBe(false);
+		expect(isLocale('')).toBe(false);
+	});
+
+	it('returns false for non-string values', () => {
+		expect(isLocale(null)).toBe(false);
+		expect(isLocale(undefined)).toBe(false);
+		expect(isLocale(42)).toBe(false);
+	});
+});
+
+describe('getLocale ↔ locales sync', () => {
+	it('every locale in locales array is accepted by getLocale', () => {
+		for (const loc of locales) {
+			expect(getLocale(loc)).toBe(loc);
+		}
+	});
+
+	it('localeNames has an entry for every locale', () => {
+		for (const loc of locales) {
+			expect(localeNames[loc]).toBeDefined();
+			expect(typeof localeNames[loc]).toBe('string');
+			expect(localeNames[loc].length).toBeGreaterThan(0);
+		}
 	});
 });

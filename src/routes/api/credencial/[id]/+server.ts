@@ -1,23 +1,27 @@
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { collaborators, colonies } from '$lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
-import { error } from '@sveltejs/kit';
+import { eq, and } from 'drizzle-orm';
 import { createHash, randomBytes } from 'crypto';
 import { env } from '$env/dynamic/private';
-
-function escapeHtml(text: string): string {
-	return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+import { orgScope, loadOrgColonies } from '$lib/server/tenant.js';
+import { requireApiUser } from '$lib/server/action-helpers.js';
+import { escHtml, htmlDocHeaders } from '$lib/server/html.js';
+import { rateLimitGuard } from '$lib/server/rate-limit.js';
+import { toStringArray } from '$lib/index.js';
 
 function generateVerificationHash(id: string, name: string): string {
 	return createHash('sha256').update(`${id}:${name}:${randomBytes(8).toString('hex')}`).digest('hex').slice(0, 32);
 }
 
-export const GET: RequestHandler = async ({ params, locals }) => {
-	if (!locals.user) throw error(401, 'No autenticado');
+export const GET: RequestHandler = async ({ params, locals, request }) => {
+	requireApiUser(locals);
+	const blocked = rateLimitGuard('export', locals.user?.id, request);
+	if (blocked) return blocked;
 
-	const col = await db.select().from(collaborators).where(eq(collaborators.id, params.id)).limit(1);
+	const orgId = locals.organizationId;
+	const col = await db.select().from(collaborators).where(and(eq(collaborators.id, params.id), orgScope(collaborators.organizationId, orgId))).limit(1);
 	if (!col[0]) throw error(404, 'Colaborador no encontrado');
 	if (col[0].status !== 'active') throw error(403, 'Credencial solo disponible para colaboradores activos');
 
@@ -26,17 +30,15 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	let hash = c.verificationHash;
 	if (!hash) {
 		hash = generateVerificationHash(c.id, c.name);
-		await db.update(collaborators).set({ verificationHash: hash }).where(eq(collaborators.id, c.id));
+		await db.update(collaborators).set({ verificationHash: hash }).where(and(eq(collaborators.id, c.id), orgScope(collaborators.organizationId, orgId)));
 	}
 
 	const baseUrl = env.BETTER_AUTH_URL || 'http://localhost:5173';
 	const verifyUrl = `${baseUrl}/api/verificar/${hash}`;
 
-	const allColonies = await db.select({ id: colonies.id, name: colonies.name }).from(colonies);
+	const allColonies = await loadOrgColonies(orgId);
 	const colonyMap = new Map(allColonies.map(co => [co.id, co.name]));
-	const assignedNames = Array.isArray(c.assignedColonies)
-		? (c.assignedColonies as string[]).map(id => colonyMap.get(id) ?? id)
-		: [];
+	const assignedNames = toStringArray(c.assignedColonies).map(id => colonyMap.get(id) ?? id);
 
 	const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(verifyUrl)}`;
 
@@ -44,7 +46,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Credencial - ${escapeHtml(c.name)}</title>
+<title>Credencial - ${escHtml(c.name)}</title>
 <style>
 @page { size: A5 portrait; margin: 1cm; }
 body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; background: #fff; }
@@ -80,9 +82,9 @@ ${c.photo ? `.avatar img { width: 100%; height: 100%; border-radius: 50%; object
     <p>COLONIAS FELINAS URBANAS</p>
   </div>
   <div class="body">
-    <div class="avatar">${c.photo ? `<img src="${c.photo}" alt="${escapeHtml(c.name)}">` : escapeHtml(c.name.charAt(0))}</div>
-    <div class="name">${escapeHtml(c.name)}</div>
-    ${c.documentId ? `<div class="doc-id">${escapeHtml(c.documentId)}</div>` : ''}
+    <div class="avatar">${c.photo ? `<img src="${c.photo}" alt="${escHtml(c.name)}">` : escHtml(c.name.charAt(0))}</div>
+    <div class="name">${escHtml(c.name)}</div>
+    ${c.documentId ? `<div class="doc-id">${escHtml(c.documentId)}</div>` : ''}
     <div class="cred-id">CRED-${c.id.slice(0, 8).toUpperCase()}</div>
     <div class="qr">
       <img src="${qrApiUrl}" alt="QR de verificación" width="140" height="140" />
@@ -95,7 +97,7 @@ ${c.photo ? `.avatar img { width: 100%; height: 100%; border-radius: 50%; object
       </div>
       <div class="info-row">
         <span class="info-label">Colonias asignadas</span>
-        <span class="info-value">${escapeHtml(assignedNames.join(', ') || 'Sin asignar')}</span>
+        <span class="info-value">${escHtml(assignedNames.join(', ') || 'Sin asignar')}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Válida hasta</span>
@@ -108,7 +110,7 @@ ${c.photo ? `.avatar img { width: 100%; height: 100%; border-radius: 50%; object
     </div>
   </div>
   <div class="footer">
-    Gatopolis &middot; Verificable en ${escapeHtml(verifyUrl)}
+    Gatopolis &middot; Verificable en ${escHtml(verifyUrl)}
     <div class="hash">Hash: ${hash}</div>
   </div>
 </div>
@@ -116,9 +118,6 @@ ${c.photo ? `.avatar img { width: 100%; height: 100%; border-radius: 50%; object
 </html>`;
 
 	return new Response(html, {
-		headers: {
-			'Content-Type': 'text/html; charset=utf-8',
-			'Content-Disposition': `inline; filename="credencial-${c.id.slice(0, 8)}.html"`
-		}
+		headers: htmlDocHeaders(`credencial-${c.id.slice(0, 8)}.html`)
 	});
 };

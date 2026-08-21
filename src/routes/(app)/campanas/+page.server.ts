@@ -1,28 +1,43 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { trappingCampaigns, trappingEvents, colonies, equipment, users, auditLogs } from '$lib/server/db/schema.js';
-import { eq, sql, desc } from 'drizzle-orm';
+import { trappingCampaigns, trappingEvents, colonies, equipment, users } from '$lib/server/db/schema.js';
+import { eq, sql, desc, and, inArray } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
+import { requireAuthContext, getFormField, requireFields } from '$lib/server/action-helpers.js';
+import { orgScope, verifyOrgOwnership, loadOrgColonies } from '$lib/server/tenant.js';
+import { guardedUpdate, guardedInsert } from '$lib/server/db-helpers.js';
+import { parsePagination, paginateWithCount } from '$lib/server/pagination.js';
+import { groupByKey } from '$lib/index.js';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	const [campaigns, allColonies, allEquipment, allEvents] = await Promise.all([
-		db.select({
-			id: trappingCampaigns.id,
-			name: trappingCampaigns.name,
-			colonyId: trappingCampaigns.colonyId,
-			colonyName: colonies.name,
-			startDate: trappingCampaigns.startDate,
-			endDate: trappingCampaigns.endDate,
-			status: trappingCampaigns.status,
-			notes: trappingCampaigns.notes,
-			createdAt: trappingCampaigns.createdAt,
-			eventCount: sql<number>`(SELECT count(*) FROM trapping_events WHERE trapping_events.campaign_id = ${trappingCampaigns.id})`
-		})
-			.from(trappingCampaigns)
-			.leftJoin(colonies, eq(trappingCampaigns.colonyId, colonies.id))
-			.orderBy(desc(trappingCampaigns.createdAt)),
-		db.select({ id: colonies.id, name: colonies.name }).from(colonies),
-		db.select({ id: equipment.id, name: equipment.name, type: equipment.type }).from(equipment).where(eq(equipment.status, 'available')),
+export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
+	const pagination = parsePagination(url);
+	const whereCamp = orgScope(trappingCampaigns.organizationId, orgId);
+
+	const baseSelect = db.select({
+		id: trappingCampaigns.id,
+		name: trappingCampaigns.name,
+		colonyId: trappingCampaigns.colonyId,
+		colonyName: colonies.name,
+		startDate: trappingCampaigns.startDate,
+		endDate: trappingCampaigns.endDate,
+		status: trappingCampaigns.status,
+		notes: trappingCampaigns.notes,
+		createdAt: trappingCampaigns.createdAt,
+		eventCount: sql<number>`(SELECT count(*) FROM trapping_events WHERE trapping_events.campaign_id = ${trappingCampaigns.id})`
+	})
+		.from(trappingCampaigns)
+		.leftJoin(colonies, eq(trappingCampaigns.colonyId, colonies.id))
+		.where(whereCamp)
+		.orderBy(desc(trappingCampaigns.createdAt))
+		.$dynamic();
+
+	const campaignIdsSubquery = db.select({ id: trappingCampaigns.id }).from(trappingCampaigns).where(whereCamp);
+
+	const [paginated, allColonies, allEquipment, allEvents] = await Promise.all([
+		paginateWithCount(baseSelect, trappingCampaigns, whereCamp, pagination),
+		loadOrgColonies(orgId),
+		db.select({ id: equipment.id, name: equipment.name, type: equipment.type }).from(equipment).where(orgScope(equipment.organizationId, orgId)),
 		db.select({
 			id: trappingEvents.id,
 			campaignId: trappingEvents.campaignId,
@@ -33,18 +48,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})
 			.from(trappingEvents)
 			.leftJoin(users, eq(trappingEvents.performedBy, users.id))
+			.where(inArray(trappingEvents.campaignId, campaignIdsSubquery))
 			.orderBy(trappingEvents.performedAt)
 	]);
 
-	const eventsByCampaign: Record<string, typeof allEvents> = {};
-	for (const ev of allEvents) {
-		if (!eventsByCampaign[ev.campaignId]) eventsByCampaign[ev.campaignId] = [];
-		eventsByCampaign[ev.campaignId].push(ev);
-	}
+	const eventsByCampaign = groupByKey(allEvents, ev => ev.campaignId);
 
 	return {
 		locale: locals.locale,
-		campaigns,
+		...paginated,
 		colonies: allColonies,
 		equipment: allEquipment,
 		eventsByCampaign
@@ -53,61 +65,65 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) return fail(401);
-		const form = await request.formData();
-		const name = form.get('name') as string;
-		const colonyId = form.get('colonyId') as string;
-		const startDate = form.get('startDate') as string;
-		const endDate = form.get('endDate') as string;
-		const notes = form.get('notes') as string;
+		const ctx = requireAuthContext(locals, request);
+		const fd = await request.formData();
+		const { name, startDate } = requireFields(fd, {
+			name: 'El nombre', startDate: 'La fecha de inicio'
+		});
 
-		if (!name || !startDate) return fail(400, { error: 'Nombre y fecha de inicio son obligatorios' });
+		const colonyId = getFormField(fd, 'colonyId');
+		if (colonyId && !await verifyOrgOwnership(colonies, colonyId, ctx.organizationId)) {
+			return fail(404, { error: 'Colonia no encontrada' });
+		}
 
-		await db.insert(trappingCampaigns).values({
+		const endDate = getFormField(fd, 'endDate');
+		const notes = getFormField(fd, 'notes');
+
+		await guardedInsert(trappingCampaigns, {
+			organizationId: ctx.organizationId,
 			name,
 			colonyId: colonyId || null,
 			startDate,
 			endDate: endDate || null,
 			status: 'planned',
 			notes: notes || null,
-			createdBy: locals.user.id
-		});
-
-		await db.insert(auditLogs).values({
-			userId: locals.user.id,
-			entity: 'trapping_campaign',
-			entityId: name,
-			action: 'create',
-			details: { name, colonyId }
-		});
+			createdBy: ctx.userId
+		}, ctx, 'trapping_campaign', 'create', { name, colonyId });
 
 		return { success: true };
 	},
+
 	updateStatus: async ({ request, locals }) => {
-		if (!locals.user) return fail(401);
-		const form = await request.formData();
-		const id = form.get('id') as string;
-		const status = form.get('status') as string;
-		if (!id || !status) return fail(400);
+		const ctx = requireAuthContext(locals, request);
+		const fd = await request.formData();
+		const { id, status } = requireFields(fd, { id: 'El ID', status: 'El estado' });
 
-		await db.update(trappingCampaigns).set({ status, updatedAt: new Date() }).where(eq(trappingCampaigns.id, id));
+		await guardedUpdate(trappingCampaigns, { status, updatedAt: new Date() },
+			and(eq(trappingCampaigns.id, id), orgScope(trappingCampaigns.organizationId, ctx.organizationId)),
+			ctx, 'trapping_campaign', id, 'change_status', { status });
 		return { success: true };
 	},
+
 	addEvent: async ({ request, locals }) => {
-		if (!locals.user) return fail(401);
-		const form = await request.formData();
-		const campaignId = form.get('campaignId') as string;
-		const eventType = form.get('eventType') as string;
-		const notes = form.get('notes') as string;
+		const ctx = requireAuthContext(locals, request);
+		const fd = await request.formData();
+		const { campaignId, eventType } = requireFields(fd, {
+			campaignId: 'La campaña', eventType: 'El tipo de evento'
+		});
 
-		if (!campaignId || !eventType) return fail(400);
+		const [campaign] = await db.select({ id: trappingCampaigns.id }).from(trappingCampaigns)
+			.where(and(eq(trappingCampaigns.id, campaignId), orgScope(trappingCampaigns.organizationId, ctx.organizationId)))
+			.limit(1);
+		if (!campaign) return fail(404, { error: 'Campaña no encontrada' });
 
-		await db.insert(trappingEvents).values({
+		const notes = getFormField(fd, 'notes');
+
+		await guardedInsert(trappingEvents, {
 			campaignId,
 			eventType,
 			notes: notes || null,
-			performedBy: locals.user.id
-		});
+			performedBy: ctx.userId
+		}, ctx, 'trapping_event', 'create', { campaignId, eventType });
 
 		return { success: true };
 	}

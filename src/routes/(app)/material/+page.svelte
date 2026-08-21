@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
+	import { toDateString } from '$lib/index.js';
 	import type { PageData } from './$types.js';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let { data }: { data: PageData } = $props();
 	let locale = $derived(data.locale);
@@ -87,7 +89,7 @@
 		</div>
 	{/if}
 
-	{#if data.equipment.length === 0}
+	{#if data.items.length === 0}
 		<div class="bg-surface rounded-xl border border-border p-12 text-center">
 			<p class="text-text-muted text-sm">{t(locale, 'equipment.no_equipment')}</p>
 		</div>
@@ -106,7 +108,7 @@
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-border">
-						{#each data.equipment as item}
+						{#each data.items as item}
 							<tr class="hover:bg-surface-sunken/50 transition-colors">
 								<td class="px-4 py-3 font-medium text-text">{typeIcons[item.type] ?? '🔧'} {item.name}</td>
 								<td class="px-4 py-3 text-text-secondary">{t(locale, `equipment.type_${item.type}`)}</td>
@@ -131,7 +133,7 @@
 								{#if item.status === 'available'}
 									<form method="POST" action="?/loan" use:enhance class="inline">
 										<input type="hidden" name="id" value={item.id} />
-										<input type="hidden" name="dueDate" value={new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)} />
+										<input type="hidden" name="dueDate" value={toDateString(new Date(Date.now() + 14 * 86400000))} />
 										<button type="submit" class="text-xs text-primary font-medium hover:underline">Prestar</button>
 									</form>
 								{:else if item.status === 'loaned'}
@@ -141,10 +143,9 @@
 										<button type="submit" class="text-xs text-success font-medium hover:underline">Devolver</button>
 									</form>
 								{/if}
-								{@const history = historyByEquipment[item.id] ?? []}
-								{#if history.length > 0}
+								{#if (historyByEquipment[item.id] ?? []).length > 0}
 									<button onclick={() => expandedHistory = expandedHistory === item.id ? null : item.id} class="text-xs text-text-muted font-medium hover:text-text transition-colors">
-										{t(locale, 'equipment.history')} ({history.length})
+										{t(locale, 'equipment.history')} ({(historyByEquipment[item.id] ?? []).length})
 									</button>
 								{/if}
 							</td>
@@ -176,4 +177,6 @@
 			</div>
 		</div>
 	{/if}
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

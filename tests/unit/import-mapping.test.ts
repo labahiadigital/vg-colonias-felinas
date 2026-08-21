@@ -1,48 +1,8 @@
 import { describe, it, expect } from 'vitest';
-
-const ENTITY_MAP: Record<string, { mapRow: (row: Record<string, string>) => Record<string, unknown> }> = {
-	colonies: {
-		mapRow: (r) => ({
-			name: r.name || r.nombre || 'Sin nombre',
-			status: r.status || r.estado || 'active',
-			classification: r.classification || r.clasificacion || null,
-			district: r.district || r.distrito || null,
-			description: r.description || r.descripcion || null,
-			latitude: r.latitude || r.latitud ? parseFloat(r.latitude || r.latitud) : null,
-			longitude: r.longitude || r.longitud ? parseFloat(r.longitude || r.longitud) : null
-		})
-	},
-	cats: {
-		mapRow: (r) => ({
-			name: r.name || r.nombre || null,
-			sex: r.sex || r.sexo || null,
-			sterilized: ['true', 'si', 'sí', '1', 'yes'].includes((r.sterilized || r.esterilizado || '').toLowerCase()),
-			microchip: r.microchip || null,
-			status: r.status || r.estado || 'in_colony',
-			estimatedAge: r.estimatedAge || r.edad_estimada || r.edad || null
-		})
-	},
-	collaborators: {
-		mapRow: (r) => ({
-			name: r.name || r.nombre || 'Sin nombre',
-			documentId: r.documentId || r.dni || r.documento || null,
-			status: r.status || r.estado || 'pending'
-		})
-	},
-	incidents: {
-		mapRow: (r) => ({
-			category: r.category || r.categoria || 'general',
-			priority: r.priority || r.prioridad || 'medium',
-			status: r.status || r.estado || 'open',
-			description: r.description || r.descripcion || '',
-			latitude: r.latitude || r.latitud ? parseFloat(r.latitude || r.latitud) : null,
-			longitude: r.longitude || r.longitud ? parseFloat(r.longitude || r.longitud) : null
-		})
-	}
-};
+import { ENTITY_MAPPERS, SUPPORTED_ENTITIES } from '../../src/lib/server/import-mapping.js';
 
 describe('Import mapRow: colonies', () => {
-	const { mapRow } = ENTITY_MAP.colonies;
+	const { mapRow } = ENTITY_MAPPERS['colonies']!;
 
 	it('maps English field names', () => {
 		const result = mapRow({ name: 'TestColony', status: 'active', district: 'Centro' });
@@ -85,10 +45,27 @@ describe('Import mapRow: colonies', () => {
 		expect(result.classification).toBeNull();
 		expect(result.description).toBeNull();
 	});
+
+	it('returns null for non-numeric latitude/longitude', () => {
+		const result = mapRow({ name: 'Test', latitude: 'abc', longitude: 'xyz' });
+		expect(result.latitude).toBeNull();
+		expect(result.longitude).toBeNull();
+	});
+
+	it('returns null for empty latitude/longitude', () => {
+		const result = mapRow({ name: 'Test', latitude: '', longitude: '' });
+		expect(result.latitude).toBeNull();
+		expect(result.longitude).toBeNull();
+	});
+
+	it('returns null for Infinity latitude', () => {
+		const result = mapRow({ name: 'Test', latitude: 'Infinity' });
+		expect(result.latitude).toBeNull();
+	});
 });
 
 describe('Import mapRow: cats', () => {
-	const { mapRow } = ENTITY_MAP.cats;
+	const { mapRow } = ENTITY_MAPPERS['cats']!;
 
 	it('maps English field names', () => {
 		const result = mapRow({ name: 'Michi', sex: 'male', microchip: 'ABC123' });
@@ -105,36 +82,36 @@ describe('Import mapRow: cats', () => {
 	});
 
 	it('parses sterilized "si" as true', () => {
-		expect(ENTITY_MAP.cats.mapRow({ esterilizado: 'si' }).sterilized).toBe(true);
+		expect(mapRow({ esterilizado: 'si' }).sterilized).toBe(true);
 	});
 
 	it('parses sterilized "sí" as true', () => {
-		expect(ENTITY_MAP.cats.mapRow({ esterilizado: 'Sí' }).sterilized).toBe(true);
+		expect(mapRow({ esterilizado: 'Sí' }).sterilized).toBe(true);
 	});
 
 	it('parses sterilized "yes" as true', () => {
-		expect(ENTITY_MAP.cats.mapRow({ sterilized: 'yes' }).sterilized).toBe(true);
+		expect(mapRow({ sterilized: 'yes' }).sterilized).toBe(true);
 	});
 
 	it('parses sterilized "1" as true', () => {
-		expect(ENTITY_MAP.cats.mapRow({ sterilized: '1' }).sterilized).toBe(true);
+		expect(mapRow({ sterilized: '1' }).sterilized).toBe(true);
 	});
 
 	it('parses sterilized "no" as false', () => {
-		expect(ENTITY_MAP.cats.mapRow({ sterilized: 'no' }).sterilized).toBe(false);
+		expect(mapRow({ sterilized: 'no' }).sterilized).toBe(false);
 	});
 
 	it('parses empty sterilized as false', () => {
-		expect(ENTITY_MAP.cats.mapRow({}).sterilized).toBe(false);
+		expect(mapRow({}).sterilized).toBe(false);
 	});
 
 	it('defaults status to "in_colony"', () => {
-		expect(ENTITY_MAP.cats.mapRow({}).status).toBe('in_colony');
+		expect(mapRow({}).status).toBe('in_colony');
 	});
 });
 
 describe('Import mapRow: collaborators', () => {
-	const { mapRow } = ENTITY_MAP.collaborators;
+	const { mapRow } = ENTITY_MAPPERS['collaborators']!;
 
 	it('maps English names', () => {
 		const result = mapRow({ name: 'Juan', documentId: '12345678A' });
@@ -149,12 +126,12 @@ describe('Import mapRow: collaborators', () => {
 	});
 
 	it('defaults status to "pending"', () => {
-		expect(ENTITY_MAP.collaborators.mapRow({ name: 'Test' }).status).toBe('pending');
+		expect(mapRow({ name: 'Test' }).status).toBe('pending');
 	});
 });
 
 describe('Import mapRow: incidents', () => {
-	const { mapRow } = ENTITY_MAP.incidents;
+	const { mapRow } = ENTITY_MAPPERS['incidents']!;
 
 	it('maps English names', () => {
 		const result = mapRow({ category: 'health', priority: 'high', description: 'Cat injured' });
@@ -176,12 +153,41 @@ describe('Import mapRow: incidents', () => {
 		expect(result.priority).toBe('medium');
 		expect(result.status).toBe('open');
 	});
+
+	it('maps colonyId fields', () => {
+		expect(mapRow({ colonyId: 'c1' }).colonyId).toBe('c1');
+		expect(mapRow({ colony_id: 'c2' }).colonyId).toBe('c2');
+		expect(mapRow({ colonia_id: 'c3' }).colonyId).toBe('c3');
+	});
 });
 
-describe('ENTITY_MAP supported entities', () => {
-	it('supports colonies', () => expect(ENTITY_MAP.colonies).toBeDefined());
-	it('supports cats', () => expect(ENTITY_MAP.cats).toBeDefined());
-	it('supports collaborators', () => expect(ENTITY_MAP.collaborators).toBeDefined());
-	it('supports incidents', () => expect(ENTITY_MAP.incidents).toBeDefined());
-	it('does not support unknown entity', () => expect(ENTITY_MAP['unknown']).toBeUndefined());
+describe('Import mapRow: health', () => {
+	const { mapRow } = ENTITY_MAPPERS['health']!;
+
+	it('maps English field names', () => {
+		const result = mapRow({ catId: 'cat1', type: 'surgery', vetName: 'Dr. Smith' });
+		expect(result.catId).toBe('cat1');
+		expect(result.type).toBe('surgery');
+		expect(result.vetName).toBe('Dr. Smith');
+	});
+
+	it('maps Spanish field names', () => {
+		const result = mapRow({ cat_id: 'cat2', tipo: 'vacunacion', veterinario: 'Dr. García' });
+		expect(result.catId).toBe('cat2');
+		expect(result.type).toBe('vacunacion');
+		expect(result.vetName).toBe('Dr. García');
+	});
+
+	it('defaults type to "revision"', () => {
+		expect(mapRow({ catId: 'c1' }).type).toBe('revision');
+	});
+});
+
+describe('SUPPORTED_ENTITIES', () => {
+	it('includes colonies', () => expect(SUPPORTED_ENTITIES).toContain('colonies'));
+	it('includes cats', () => expect(SUPPORTED_ENTITIES).toContain('cats'));
+	it('includes collaborators', () => expect(SUPPORTED_ENTITIES).toContain('collaborators'));
+	it('includes health', () => expect(SUPPORTED_ENTITIES).toContain('health'));
+	it('includes incidents', () => expect(SUPPORTED_ENTITIES).toContain('incidents'));
+	it('has 5 entities', () => expect(SUPPORTED_ENTITIES).toHaveLength(5));
 });

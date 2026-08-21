@@ -1,54 +1,60 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { colonies, cats, apiKeys } from '$lib/server/db/schema.js';
-import { eq, sql } from 'drizzle-orm';
-import { validateApiKey } from '$lib/server/api-auth.js';
+import { colonies } from '$lib/server/db/schema.js';
+import { sql } from 'drizzle-orm';
+import { requireApiAuth } from '$lib/server/api-auth.js';
+import { orgScope } from '$lib/server/tenant.js';
+import { parsePagination, paginatedResponse } from '$lib/server/pagination.js';
 
 export const GET: RequestHandler = async ({ request, url }) => {
-	const auth = await validateApiKey(request, 'colonies:read');
-	if (!auth.valid) return json({ error: auth.error }, { status: 401 });
+	const auth = await requireApiAuth(request, 'colonies:read');
+	if (auth instanceof Response) return auth;
 
-	const page = Math.max(1, Number(url.searchParams.get('page') || 1));
-	const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') || 20)));
-	const offset = (page - 1) * limit;
+	const { page, pageSize } = parsePagination(url);
+	const orgId = auth.organizationId;
+	const where = orgScope(colonies.organizationId, orgId);
 
-	const data = await db
-		.select({
+	const [data, countRows] = await Promise.all([
+		db.select({
 			id: colonies.id,
 			name: colonies.name,
-			address: colonies.address,
+			district: colonies.district,
 			latitude: colonies.latitude,
 			longitude: colonies.longitude,
-			environment: colonies.environment,
+			status: colonies.status,
 			isActive: colonies.isActive,
 			createdAt: colonies.createdAt,
 			catCount: sql<number>`(select count(*) from cats where cats.colony_id = colonies.id)`
 		})
-		.from(colonies)
-		.limit(limit)
-		.offset(offset);
+			.from(colonies)
+			.where(where)
+			.limit(pageSize)
+			.offset((page - 1) * pageSize),
+		db.select({ count: sql<number>`count(*)` }).from(colonies).where(where)
+	]);
 
-	const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(colonies);
+	const total = Number(countRows[0]?.count ?? 0);
+	const paginated = paginatedResponse(data, total, { page, pageSize });
 
 	return json({
-		data,
+		data: paginated.items,
 		pagination: {
-			page,
-			limit,
-			total: Number(count),
-			totalPages: Math.ceil(Number(count) / limit)
+			page: paginated.page,
+			limit: paginated.pageSize,
+			total: paginated.totalItems,
+			totalPages: paginated.totalPages
 		},
 		_links: {
-			self: `/api/v1/colonies?page=${page}&limit=${limit}`,
-			...(page * limit < Number(count) ? { next: `/api/v1/colonies?page=${page + 1}&limit=${limit}` } : {}),
-			...(page > 1 ? { prev: `/api/v1/colonies?page=${page - 1}&limit=${limit}` } : {})
+			self: `/api/v1/colonies?page=${page}&limit=${pageSize}`,
+			...(page * pageSize < total ? { next: `/api/v1/colonies?page=${page + 1}&limit=${pageSize}` } : {}),
+			...(page > 1 ? { prev: `/api/v1/colonies?page=${page - 1}&limit=${pageSize}` } : {})
 		}
 	}, {
 		headers: {
-			'X-Total-Count': String(count),
+			'X-Total-Count': String(total),
 			'X-Page': String(page),
-			'X-RateLimit-Remaining': String(auth.remaining ?? 999)
+			'X-RateLimit-Remaining': String(auth.remaining)
 		}
 	});
 };

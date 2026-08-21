@@ -1,56 +1,6 @@
-import { describe, it, expect } from 'vitest';
-
-function getDefaultSmtp(): { host: string; port: number; user: string; pass: string; from: string } | null {
-	const host = process.env.SMTP_HOST;
-	const user = process.env.SMTP_USER;
-	const pass = process.env.SMTP_PASS;
-	if (!host || !user || !pass) return null;
-
-	return {
-		host,
-		port: parseInt(process.env.SMTP_PORT || '587'),
-		user,
-		pass,
-		from: process.env.SMTP_FROM || user
-	};
-}
-
-function replaceTemplateVariables(
-	template: { subject: string; bodyHtml: string; bodyText: string },
-	variables: Record<string, string>
-): { subject: string; html: string; text: string } {
-	let subject = template.subject;
-	let html = template.bodyHtml;
-	let text = template.bodyText;
-
-	for (const [key, value] of Object.entries(variables)) {
-		const placeholder = `{{${key}}}`;
-		subject = subject.replaceAll(placeholder, value);
-		html = html.replaceAll(placeholder, value);
-		text = text.replaceAll(placeholder, value);
-	}
-
-	return { subject, html, text };
-}
-
-function buildEmailHtml(title: string, message: string, userName: string): string {
-	return `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="utf-8"></head>
-<body style="font-family:'Segoe UI',Arial,sans-serif;background:#f4f7f6;margin:0;padding:20px">
-<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)">
-	<div style="background:#005a4d;padding:20px 24px">
-		<h1 style="color:#fff;font-size:18px;margin:0">Gestión de Colonias Felinas</h1>
-	</div>
-	<div style="padding:24px">
-		<p style="color:#333;font-size:14px;margin:0 0 8px">Hola ${userName},</p>
-		<h2 style="color:#005a4d;font-size:16px;margin:0 0 12px">${title}</h2>
-		<p style="color:#555;font-size:14px;line-height:1.5;margin:0 0 20px">${message}</p>
-	</div>
-</div>
-</body>
-</html>`;
-}
+import { describe, it, expect, afterEach } from 'vitest';
+import { getDefaultSmtp, replaceTemplateVariables } from '../../src/lib/server/email.js';
+import { buildEmailHtml } from '../../src/lib/server/notifications.js';
 
 describe('getDefaultSmtp', () => {
 	const originalEnv = { ...process.env };
@@ -151,6 +101,30 @@ describe('replaceTemplateVariables', () => {
 		const result = replaceTemplateVariables(template, { known: 'value' });
 		expect(result.subject).toBe('value and {{unknown}}');
 	});
+
+	it('escapes HTML in variables injected into bodyHtml', () => {
+		const template = {
+			subject: '{{name}}',
+			bodyHtml: '<p>Hola {{name}}</p>',
+			bodyText: 'Hola {{name}}'
+		};
+		const result = replaceTemplateVariables(template, { name: '<script>alert("xss")</script>' });
+		expect(result.subject).toBe('<script>alert("xss")</script>');
+		expect(result.html).not.toContain('<script>');
+		expect(result.html).toContain('&lt;script&gt;');
+		expect(result.text).toBe('Hola <script>alert("xss")</script>');
+	});
+
+	it('escapes quotes and ampersands in HTML variables', () => {
+		const template = {
+			subject: '{{val}}',
+			bodyHtml: '<div>{{val}}</div>',
+			bodyText: '{{val}}'
+		};
+		const result = replaceTemplateVariables(template, { val: 'A & B "quoted"' });
+		expect(result.html).toContain('A &amp; B &quot;quoted&quot;');
+		expect(result.text).toBe('A & B "quoted"');
+	});
 });
 
 describe('buildEmailHtml', () => {
@@ -180,5 +154,28 @@ describe('buildEmailHtml', () => {
 	it('includes brand header', () => {
 		const html = buildEmailHtml('T', 'M', 'U');
 		expect(html).toContain('Gestión de Colonias Felinas');
+	});
+
+	it('escapes HTML in title to prevent XSS', () => {
+		const html = buildEmailHtml('<script>alert("xss")</script>', 'msg', 'User');
+		expect(html).not.toContain('<script>');
+		expect(html).toContain('&lt;script&gt;');
+	});
+
+	it('escapes HTML in message to prevent XSS', () => {
+		const html = buildEmailHtml('Title', '<img onerror="alert(1)">', 'User');
+		expect(html).not.toContain('<img onerror');
+		expect(html).toContain('&lt;img');
+	});
+
+	it('escapes HTML in userName to prevent XSS', () => {
+		const html = buildEmailHtml('Title', 'msg', '"><script>x</script>');
+		expect(html).not.toContain('"><script>');
+	});
+
+	it('includes call-to-action link', () => {
+		const html = buildEmailHtml('T', 'M', 'U');
+		expect(html).toContain('Ir a la aplicación');
+		expect(html).toContain('/dashboard');
 	});
 });

@@ -52,7 +52,8 @@
 		}
 	};
 
-	let config = $derived(illustrations[icon] ?? illustrations.search);
+	const fallback = { paths: ['M11 17.25a6.25 6.25 0 110-12.5 6.25 6.25 0 010 12.5z', 'M16 16l4.5 4.5'], accent: 'text-primary bg-primary/5' };
+	let config = $derived(illustrations[icon] ?? fallback);
 </script>
 
 <div class="py-16 text-center animate-enter">

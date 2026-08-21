@@ -1,16 +1,31 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { cats, colonies } from '$lib/server/db/schema.js';
-import { eq, ilike, and, sql } from 'drizzle-orm';
+import { eq, ilike } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
+import { requireAuthContext, getFormField } from '$lib/server/action-helpers.js';
+import { orgScope, escapeLike, verifyOrgOwnership, buildWhere, loadOrgColonies } from '$lib/server/tenant.js';
+import { guardedInsert } from '$lib/server/db-helpers.js';
+import { parsePagination, paginateWithCount } from '$lib/server/pagination.js';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
 	const search = url.searchParams.get('q') ?? '';
 	const statusFilter = url.searchParams.get('status') ?? '';
 	const colonyFilter = url.searchParams.get('colony') ?? '';
 	const sterilizedFilter = url.searchParams.get('sterilized') ?? '';
+	const pagination = parsePagination(url);
 
-	let query = db.select({
+	const whereClause = buildWhere(
+		orgScope(cats.organizationId, orgId),
+		search && ilike(cats.name, `%${escapeLike(search)}%`),
+		statusFilter && eq(cats.status, statusFilter),
+		colonyFilter && eq(cats.colonyId, colonyFilter),
+		sterilizedFilter === 'yes' && eq(cats.sterilized, true),
+		sterilizedFilter === 'no' && eq(cats.sterilized, false)
+	);
+
+	const baseSelect = db.select({
 		id: cats.id,
 		name: cats.name,
 		colonyId: cats.colonyId,
@@ -27,20 +42,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.leftJoin(colonies, eq(cats.colonyId, colonies.id))
 		.$dynamic();
 
-	const conditions = [];
-	if (search) conditions.push(ilike(cats.name, `%${search}%`));
-	if (statusFilter) conditions.push(eq(cats.status, statusFilter));
-	if (colonyFilter) conditions.push(eq(cats.colonyId, colonyFilter));
-	if (sterilizedFilter === 'yes') conditions.push(eq(cats.sterilized, true));
-	if (sterilizedFilter === 'no') conditions.push(eq(cats.sterilized, false));
-	if (conditions.length > 0) query = query.where(and(...conditions));
+	if (whereClause) baseSelect.where(whereClause);
 
-	const allCats = await query;
-	const allColonies = await db.select({ id: colonies.id, name: colonies.name }).from(colonies);
+	const [paginated, allColonies] = await Promise.all([
+		paginateWithCount(baseSelect, cats, whereClause, pagination),
+		loadOrgColonies(orgId)
+	]);
 
 	return {
 		locale: locals.locale,
-		cats: allCats,
+		...paginated,
 		colonies: allColonies,
 		filters: { search, status: statusFilter, colony: colonyFilter, sterilized: sterilizedFilter }
 	};
@@ -48,16 +59,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const name = fd.get('name') as string;
-		const colonyId = fd.get('colonyId') as string;
-		const sex = fd.get('sex') as string;
-		const microchip = fd.get('microchip') as string;
-		const estimatedAge = fd.get('estimatedAge') as string;
-		const photo = fd.get('photo') as string;
 
-		const [newCat] = await db.insert(cats).values({
+		const name = getFormField(fd, 'name');
+		const colonyId = getFormField(fd, 'colonyId');
+
+		if (colonyId && !await verifyOrgOwnership(colonies, colonyId, ctx.organizationId)) {
+			return fail(404, { error: 'Colonia no encontrada' });
+		}
+
+		const sex = getFormField(fd, 'sex');
+		const microchip = getFormField(fd, 'microchip');
+		const estimatedAge = getFormField(fd, 'estimatedAge');
+		const photo = getFormField(fd, 'photo');
+
+		const catId = await guardedInsert(cats, {
+			organizationId: ctx.organizationId,
 			name: name || null,
 			colonyId: colonyId || null,
 			sex: sex || null,
@@ -66,8 +84,8 @@ export const actions: Actions = {
 			photo: photo || null,
 			status: 'in_colony',
 			sterilized: false
-		}).returning({ id: cats.id });
+		}, ctx, 'cat', 'create', { name, colonyId });
 
-		return { success: true, catId: newCat.id };
+		return { success: true, catId };
 	}
 };

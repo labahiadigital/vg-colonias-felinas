@@ -19,7 +19,8 @@
 		children: Snippet;
 	} = $props();
 
-	let isCollapsed = $state(collapsed);
+	let isCollapsed = $state(false);
+	$effect(() => { isCollapsed = collapsed; });
 </script>
 
 <div class="bg-surface rounded-xl border border-border overflow-hidden interactive-card group">

@@ -68,7 +68,7 @@
 			<select
 				name="locale"
 				class="text-xs bg-transparent border border-border rounded-lg px-2.5 py-1.5 text-text-secondary cursor-pointer hover:border-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-				onchange={(e: Event) => (e.target as HTMLSelectElement).form?.submit()}
+				onchange={(e: Event) => { if (e.target instanceof HTMLSelectElement) e.target.form?.submit(); }}
 			>
 				{#each Object.entries(localeNames) as [code, name]}
 					<option value={code} selected={locale === code}>{name}</option>

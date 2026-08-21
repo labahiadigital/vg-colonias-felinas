@@ -1,10 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { collaborators, organizations } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { escHtml, htmlDocHeaders } from '$lib/server/html.js';
+import { rateLimitGuard } from '$lib/server/rate-limit.js';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, request }) => {
+	const blocked = rateLimitGuard('publicApi', undefined, request);
+	if (blocked) return blocked;
 	const hash = params.hash;
 
 	const [col] = await db
@@ -21,7 +24,7 @@ export const GET: RequestHandler = async ({ params }) => {
 
 	if (!col) {
 		return new Response(buildHtml(false, null), {
-			headers: { 'Content-Type': 'text/html; charset=utf-8' }
+			headers: htmlDocHeaders()
 		});
 	}
 
@@ -34,7 +37,7 @@ export const GET: RequestHandler = async ({ params }) => {
 	const isValid = col.status === 'active' && (!col.validUntil || new Date(col.validUntil) >= new Date());
 
 	return new Response(buildHtml(isValid, { name: col.name, validUntil: col.validUntil, orgName, status: col.status }), {
-		headers: { 'Content-Type': 'text/html; charset=utf-8' }
+		headers: htmlDocHeaders()
 	});
 };
 
@@ -64,10 +67,10 @@ function buildHtml(valid: boolean, data: { name: string; validUntil: string | nu
 	<div class="icon">${icon}</div>
 	<div class="title">${title}</div>
 	${data ? `
-		<p class="info"><strong>${data.name}</strong></p>
+		<p class="info"><strong>${escHtml(data.name)}</strong></p>
 		${data.validUntil ? `<p class="info">Válida hasta: ${new Date(data.validUntil).toLocaleDateString('es-ES')}</p>` : ''}
-		<div class="badge">${data.status === 'active' ? 'Activo/a' : data.status === 'suspended' ? 'Suspendido/a' : data.status}</div>
-		${data.orgName ? `<p class="org">${data.orgName}</p>` : ''}
+		<div class="badge">${data.status === 'active' ? 'Activo/a' : data.status === 'suspended' ? 'Suspendido/a' : escHtml(data.status)}</div>
+		${data.orgName ? `<p class="org">${escHtml(data.orgName)}</p>` : ''}
 	` : `<p class="info">El código de verificación no corresponde a ninguna credencial registrada.</p>`}
 	<p class="org" style="margin-top:24px;font-size:11px">Gatopolis — Gestión de Colonias Felinas</p>
 </div>

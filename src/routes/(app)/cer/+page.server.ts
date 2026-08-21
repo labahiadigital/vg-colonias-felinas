@@ -1,62 +1,68 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { cerActions, cats, colonies, auditLogs } from '$lib/server/db/schema.js';
-import { desc, eq, sql, count } from 'drizzle-orm';
-import { redirect, fail } from '@sveltejs/kit';
+import { cerActions, cats, colonies } from '$lib/server/db/schema.js';
+import { desc, eq, sql } from 'drizzle-orm';
+import { fail } from '@sveltejs/kit';
+import { requireAuthContext, getFormField, requireFields } from '$lib/server/action-helpers.js';
+import { orgScope, verifyOrgOwnership, loadOrgColonies, loadOrgCats } from '$lib/server/tenant.js';
+import { guardedInsert } from '$lib/server/db-helpers.js';
+import { parsePagination, applyPagination, paginatedResponse } from '$lib/server/pagination.js';
+import { computeRate } from '$lib/index.js';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) throw redirect(302, '/login');
+export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
+	const pagination = parsePagination(url);
+	const whereCer = orgScope(cerActions.organizationId, orgId);
 
-	const actions = await db
-		.select({
-			id: cerActions.id,
-			catId: cerActions.catId,
-			catName: cats.name,
-			colonyId: cerActions.colonyId,
-			colonyName: colonies.name,
-			capturedAt: cerActions.capturedAt,
-			sterilizedAt: cerActions.sterilizedAt,
-			returnedAt: cerActions.returnedAt,
-			collaboratorName: cerActions.collaboratorName,
-			notes: cerActions.notes,
-			createdAt: cerActions.createdAt
-		})
+	const baseSelect = db.select({
+		id: cerActions.id,
+		catId: cerActions.catId,
+		catName: cats.name,
+		colonyId: cerActions.colonyId,
+		colonyName: colonies.name,
+		capturedAt: cerActions.capturedAt,
+		sterilizedAt: cerActions.sterilizedAt,
+		returnedAt: cerActions.returnedAt,
+		collaboratorName: cerActions.collaboratorName,
+		notes: cerActions.notes,
+		createdAt: cerActions.createdAt
+	})
 		.from(cerActions)
 		.leftJoin(cats, eq(cerActions.catId, cats.id))
 		.leftJoin(colonies, eq(cerActions.colonyId, colonies.id))
-		.orderBy(desc(cerActions.createdAt));
+		.where(whereCer)
+		.orderBy(desc(cerActions.createdAt))
+		.$dynamic();
 
-	const totalActions = actions.length;
-	const completed = actions.filter(a => a.capturedAt && a.sterilizedAt && a.returnedAt).length;
-	const pendingReturn = actions.filter(a => a.sterilizedAt && !a.returnedAt).length;
-	const successRate = totalActions > 0 ? Math.round((completed / totalActions) * 100) : 0;
+	const [items, cerCountRows, monthlyRows, allCats, allColonies] = await Promise.all([
+		applyPagination(baseSelect, pagination),
+		db.select({
+			total: sql<number>`count(*)`,
+			completed: sql<number>`count(*) filter (where ${cerActions.capturedAt} is not null and ${cerActions.sterilizedAt} is not null and ${cerActions.returnedAt} is not null)`,
+			pendingReturn: sql<number>`count(*) filter (where ${cerActions.sterilizedAt} is not null and ${cerActions.returnedAt} is null)`
+		}).from(cerActions).where(whereCer),
+		db.select({
+			month: sql<string>`to_char(${cerActions.createdAt}, 'YYYY-MM')`,
+			count: sql<number>`count(*)`
+		}).from(cerActions).where(whereCer).groupBy(sql`to_char(${cerActions.createdAt}, 'YYYY-MM')`).orderBy(sql`to_char(${cerActions.createdAt}, 'YYYY-MM')`).limit(12),
+		loadOrgCats(orgId),
+		loadOrgColonies(orgId)
+	]);
 
-	const monthlyData: Record<string, number> = {};
-	for (const a of actions) {
-		if (a.createdAt) {
-			const key = new Date(a.createdAt).toISOString().slice(0, 7);
-			monthlyData[key] = (monthlyData[key] || 0) + 1;
-		}
-	}
-	const monthlyChart = Object.entries(monthlyData)
-		.sort(([a], [b]) => a.localeCompare(b))
-		.slice(-12)
-		.map(([month, count]) => ({ month, count }));
+	const cerCount = cerCountRows[0];
+	const totalActions = Number(cerCount?.total ?? 0);
+	const completedCount = Number(cerCount?.completed ?? 0);
+	const pendingReturnCount = Number(cerCount?.pendingReturn ?? 0);
+	const successRate = computeRate(completedCount, totalActions);
 
-	const allCats = await db
-		.select({ id: cats.id, name: cats.name })
-		.from(cats)
-		.orderBy(cats.name);
-
-	const allColonies = await db
-		.select({ id: colonies.id, name: colonies.name })
-		.from(colonies)
-		.orderBy(colonies.name);
+	const monthlyChart = monthlyRows
+		.filter((r): r is typeof r & { month: string } => r.month !== null)
+		.map(r => ({ month: r.month, count: Number(r.count) }));
 
 	return {
 		locale: locals.locale,
-		actions,
-		indicators: { totalActions, completed, pendingReturn, successRate },
+		...paginatedResponse(items, totalActions, pagination),
+		indicators: { totalActions, completed: completedCount, pendingReturn: pendingReturnCount, successRate },
 		monthlyChart,
 		cats: allCats,
 		colonies: allColonies
@@ -65,22 +71,28 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
 
-		const catId = fd.get('catId') as string;
-		const colonyId = fd.get('colonyId') as string;
-		const capturedAt = fd.get('capturedAt') as string;
-		const sterilizedAt = fd.get('sterilizedAt') as string;
-		const returnedAt = fd.get('returnedAt') as string;
-		const collaboratorName = fd.get('collaboratorName') as string;
-		const notes = fd.get('notes') as string;
+		const { catId, colonyId } = requireFields(fd, {
+			catId: 'El gato', colonyId: 'La colonia'
+		});
 
-		if (!catId || !colonyId) {
-			return fail(400, { error: 'Gato y colonia son obligatorios' });
-		}
+		const [catOk, colOk] = await Promise.all([
+			verifyOrgOwnership(cats, catId, ctx.organizationId),
+			verifyOrgOwnership(colonies, colonyId, ctx.organizationId)
+		]);
+		if (!catOk) return fail(404, { error: 'Gato no encontrado' });
+		if (!colOk) return fail(404, { error: 'Colonia no encontrada' });
 
-		const [action] = await db.insert(cerActions).values({
+		const capturedAt = getFormField(fd, 'capturedAt');
+		const sterilizedAt = getFormField(fd, 'sterilizedAt');
+		const returnedAt = getFormField(fd, 'returnedAt');
+		const collaboratorName = getFormField(fd, 'collaboratorName');
+		const notes = getFormField(fd, 'notes');
+
+		await guardedInsert(cerActions, {
+			organizationId: ctx.organizationId,
 			catId,
 			colonyId,
 			capturedAt: capturedAt ? new Date(capturedAt) : null,
@@ -88,16 +100,7 @@ export const actions: Actions = {
 			returnedAt: returnedAt ? new Date(returnedAt) : null,
 			collaboratorName: collaboratorName || null,
 			notes: notes || null
-		}).returning();
-
-		await db.insert(auditLogs).values({
-			userId: locals.user.id,
-			entity: 'cer_action',
-			entityId: action.id,
-			action: 'create',
-			details: { catId, colonyId }
-		});
-
+		}, ctx, 'cer_action', 'create', { catId, colonyId });
 		return { success: true };
 	}
 };

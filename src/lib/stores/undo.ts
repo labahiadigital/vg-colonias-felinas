@@ -51,21 +51,21 @@ export function scheduleWithUndo(opts: {
 	return id;
 }
 
-export function cancelAction(id: string) {
+export async function cancelAction(id: string) {
 	const action = actions.find(a => a.id === id);
 	if (action) {
 		clearTimeout(action.timer);
-		action.undo();
+		await action.undo();
 		actions = actions.filter(a => a.id !== id);
 		notify();
 	}
 }
 
-export function dismissAction(id: string) {
+export async function dismissAction(id: string) {
 	const action = actions.find(a => a.id === id);
 	if (action) {
 		clearTimeout(action.timer);
-		action.execute();
+		await action.execute();
 		actions = actions.filter(a => a.id !== id);
 		notify();
 	}

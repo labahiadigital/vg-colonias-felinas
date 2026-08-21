@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.js';
+	import { toRecord } from '$lib/index.js';
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
+
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let showNewForm = $state(false);
 	let editingAdoption = $state<string | null>(null);
@@ -21,10 +24,9 @@
 	}
 
 	function getAdopterField(info: unknown, field: string): string {
-		if (info && typeof info === 'object' && field in (info as Record<string, unknown>)) {
-			return String((info as Record<string, unknown>)[field] || '-');
-		}
-		return '-';
+		const rec = toRecord(info);
+		const val = rec[field];
+		return val ? String(val) : '-';
 	}
 </script>
 
@@ -32,7 +34,7 @@
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 		<div>
 			<h1 class="text-2xl font-bold text-text tracking-tight">{t(locale, 'adoptions.title')}</h1>
-			<p class="text-sm text-text-muted mt-0.5">{data.adoptions.length} {t(locale, 'adoptions.registered_count')}</p>
+			<p class="text-sm text-text-muted mt-0.5">{data.totalItems} {t(locale, 'adoptions.registered_count')}</p>
 		</div>
 		<button onclick={() => showNewForm = !showNewForm}
 			class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors shadow-sm">
@@ -110,7 +112,7 @@
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-border">
-					{#each data.adoptions as adoption}
+					{#each data.items as adoption}
 						{@const badge = statusConfig(adoption.status)}
 						<tr class="hover:bg-surface-sunken/50 transition-colors">
 							<td class="px-4 py-3 font-medium">
@@ -150,23 +152,23 @@
 							</td>
 						</tr>
 						{#if editingAdoption === adoption.id}
-							{@const info = (adoption.adopterInfo as Record<string, string> | null) ?? {}}
+							{@const info = toRecord(adoption.adopterInfo)}
 							<tr class="bg-surface-sunken/50">
 								<td colspan="7" class="px-4 py-3">
 									<form method="POST" action="?/edit" use:enhance class="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
 										<input type="hidden" name="id" value={adoption.id} />
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'adoptions.adopter_name')}</label>
-											<input type="text" name="adopterName" value={info.name ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-										</div>
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'adoptions.adopter_phone')}</label>
-											<input type="text" name="adopterPhone" value={info.phone ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-										</div>
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'adoptions.adopter_email')}</label>
-											<input type="text" name="adopterEmail" value={info.email ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-										</div>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'adoptions.adopter_name')}</span>
+									<input type="text" name="adopterName" value={typeof info.name === 'string' ? info.name : ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
+									</label>
+									<label class="block">
+										<span class="text-[10px] text-text-muted uppercase">{t(locale, 'adoptions.adopter_phone')}</span>
+										<input type="text" name="adopterPhone" value={typeof info.phone === 'string' ? info.phone : ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
+									</label>
+									<label class="block">
+										<span class="text-[10px] text-text-muted uppercase">{t(locale, 'adoptions.adopter_email')}</span>
+										<input type="text" name="adopterEmail" value={typeof info.email === 'string' ? info.email : ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
+										</label>
 										<div class="flex gap-1">
 											<button type="submit" class="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover transition-colors">{t(locale, 'common.save')}</button>
 											<button type="button" onclick={() => editingAdoption = null} class="px-3 py-1.5 bg-surface-sunken text-text-secondary rounded-lg text-xs font-medium hover:bg-border transition-colors">{t(locale, 'common.cancel')}</button>
@@ -176,11 +178,12 @@
 							</tr>
 						{/if}
 					{/each}
-					{#if data.adoptions.length === 0}
+					{#if data.items.length === 0}
 						<tr><td colspan="7" class="px-4 py-12 text-center text-text-muted">{t(locale, 'common.no_results')}</td></tr>
 					{/if}
 				</tbody>
 			</table>
 		</div>
+		<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 	</div>
 </div>

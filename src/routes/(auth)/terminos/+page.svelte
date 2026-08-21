@@ -1,6 +1,4 @@
 <script lang="ts">
-	import type { PageData } from './$types.js';
-	let { data }: { data: PageData } = $props();
 </script>
 
 <div class="min-h-screen bg-background">

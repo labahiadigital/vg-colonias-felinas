@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
-
 	let {
 		name = '',
 		value = '',
@@ -19,10 +17,10 @@
 		required?: boolean;
 	} = $props();
 
-	let query = $state(value ?? '');
+	let query = $state('');
 	let open = $state(false);
 	let selectedIndex = $state(0);
-	let inputEl = $state<HTMLInputElement>();
+	$effect(() => { query = value ?? ''; });
 
 	let filtered = $derived(
 		query.length === 0
@@ -44,7 +42,7 @@
 		if (!open) { if (e.key === 'ArrowDown') { open = true; e.preventDefault(); } return; }
 		if (e.key === 'ArrowDown') { selectedIndex = Math.min(selectedIndex + 1, filtered.length - 1); e.preventDefault(); }
 		else if (e.key === 'ArrowUp') { selectedIndex = Math.max(selectedIndex - 1, 0); e.preventDefault(); }
-		else if (e.key === 'Enter' && filtered[selectedIndex]) { select(filtered[selectedIndex]); e.preventDefault(); }
+		else if (e.key === 'Enter') { const sel = filtered[selectedIndex]; if (sel) { select(sel); e.preventDefault(); } }
 		else if (e.key === 'Escape') { open = false; }
 	}
 
@@ -61,7 +59,6 @@
 	<input type="hidden" {name} {value} />
 
 	<input
-		bind:this={inputEl}
 		bind:value={query}
 		{placeholder}
 		{required}

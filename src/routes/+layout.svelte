@@ -6,9 +6,13 @@
 	import OfflineIndicator from '$lib/components/ui/OfflineIndicator.svelte';
 	import UndoToastGlobal from '$lib/components/ui/UndoToastGlobal.svelte';
 	import Changelog from '$lib/components/ui/Changelog.svelte';
+	import { toRecord } from '$lib/index.js';
 
 	let { children } = $props();
-	let locale = $derived((page.data as Record<string, unknown>)?.locale as string ?? 'es');
+	let locale = $derived.by(() => {
+		const d = toRecord(page.data);
+		return typeof d.locale === 'string' ? d.locale : 'es';
+	});
 
 	const changelogEntries = [
 		{

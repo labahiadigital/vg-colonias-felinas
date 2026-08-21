@@ -1,6 +1,14 @@
+async function loadConfetti() {
+	try {
+		return (await import('canvas-confetti')).default;
+	} catch {
+		return null;
+	}
+}
+
 export async function fireConfetti() {
-	const confetti = (await import('canvas-confetti')).default;
-	confetti({
+	const confetti = await loadConfetti();
+	confetti?.({
 		particleCount: 80,
 		spread: 70,
 		origin: { y: 0.7 },
@@ -9,7 +17,8 @@ export async function fireConfetti() {
 }
 
 export async function fireSuccess() {
-	const confetti = (await import('canvas-confetti')).default;
+	const confetti = await loadConfetti();
+	if (!confetti) return;
 	const end = Date.now() + 200;
 
 	(function frame() {

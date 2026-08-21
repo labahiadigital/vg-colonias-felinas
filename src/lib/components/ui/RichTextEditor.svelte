@@ -22,7 +22,9 @@
 
 	let editorEl = $state<HTMLDivElement>();
 	let editor: Editor | null = null;
-	let htmlValue = $state(content);
+	let htmlValue = $state('');
+
+	$effect(() => { htmlValue = content; });
 
 	onMount(() => {
 		if (!editorEl) return;
@@ -59,7 +61,7 @@
 
 <div class="rich-text-editor">
 	{#if label}
-		<label class="block text-sm font-medium text-text-secondary mb-1.5">{label}</label>
+		<span class="block text-sm font-medium text-text-secondary mb-1.5">{label}</span>
 	{/if}
 
 	<!-- Toolbar -->

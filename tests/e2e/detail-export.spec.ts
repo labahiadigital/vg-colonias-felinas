@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, dismissModals, suppressChangelog } from './helpers.js';
+import { login, dismissModals } from './helpers.js';
 
 test.describe('Colony detail page', () => {
 	test('navigates to colonias list', async ({ page }) => {

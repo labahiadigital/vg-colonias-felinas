@@ -2,6 +2,7 @@
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types.js';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
@@ -29,7 +30,7 @@
 			ca: { feeding: 'Alimentació', health_check: 'Control sanitari', census: 'Cens', cleaning: 'Neteja', capture: 'Captura', monitoring: 'Monitoratge', other: 'Altre' },
 			en: { feeding: 'Feeding', health_check: 'Health check', census: 'Census', cleaning: 'Cleaning', capture: 'Capture', monitoring: 'Monitoring', other: 'Other' }
 		};
-		return labels[locale]?.[type] ?? labels.es[type] ?? type;
+		return labels[locale]?.[type] ?? labels['es']?.[type] ?? type;
 	}
 
 	function typeColor(tp: string): string {
@@ -66,11 +67,11 @@
 			<p class="text-xs text-text-muted mt-1">{t(locale, 'visits.volunteer_hours')}</p>
 		</div>
 		<div class="bg-surface rounded-xl border border-border p-4 interactive-card">
-			<p class="text-2xl font-bold text-accent">{data.visits.filter(v => v.foodProvided).length}</p>
+			<p class="text-2xl font-bold text-accent">{data.items.filter(v => v.foodProvided).length}</p>
 			<p class="text-xs text-text-muted mt-1">{t(locale, 'visits.feedings')}</p>
 		</div>
 		<div class="bg-surface rounded-xl border border-border p-4 interactive-card">
-			<p class="text-2xl font-bold text-warning">{data.visits.filter(v => v.incidentDetected).length}</p>
+			<p class="text-2xl font-bold text-warning">{data.items.filter(v => v.incidentDetected).length}</p>
 			<p class="text-xs text-text-muted mt-1">{t(locale, 'visits.incidents_detected')}</p>
 		</div>
 	</div>
@@ -115,7 +116,7 @@
 						<input type="number" name="catsObserved" id="catsObserved" min="0" class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors" />
 					</div>
 					<div>
-						<label class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'visits.location')}</label>
+						<span class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'visits.location')}</span>
 						<button type="button" onclick={getLocation} class="w-full px-3 py-2 bg-info/8 text-info border border-info/20 rounded-lg text-sm font-medium hover:bg-info/12 transition-colors inline-flex items-center justify-center gap-2 min-h-[40px]">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
 							{useGeo ? `${geoLat.slice(0, 8)}, ${geoLng.slice(0, 8)}` : t(locale, 'visits.get_location')}
@@ -237,7 +238,7 @@
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-border">
-					{#each data.visits as visit}
+					{#each data.items as visit}
 						<tr class="hover:bg-surface-sunken/50 transition-colors">
 							<td class="px-4 py-3 text-text-secondary">{visit.visitedAt ? new Date(visit.visitedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td>
 							<td class="px-4 py-3 font-medium">
@@ -298,30 +299,30 @@
 								<td colspan="8" class="px-4 py-3">
 									<form method="POST" action="?/edit" use:enhance class="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
 										<input type="hidden" name="id" value={visit.id} />
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'visits.colony')}</label>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'visits.colony')}</span>
 											<select name="colonyId" class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs">
 												{#each data.colonies as col}
 													<option value={col.id} selected={col.id === visit.colonyId}>{col.name}</option>
 												{/each}
 											</select>
-										</div>
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'visits.type')}</label>
+										</label>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'visits.type')}</span>
 											<select name="type" class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs">
 												{#each ['feeding', 'health_check', 'census', 'cleaning', 'capture', 'monitoring', 'other'] as tp}
 													<option value={tp} selected={visit.type === tp}>{typeLabel(tp)}</option>
 												{/each}
 											</select>
-										</div>
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'visits.duration')}</label>
+										</label>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'visits.duration')}</span>
 											<input type="number" name="durationMinutes" value={visit.durationMinutes ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-										</div>
-										<div>
-											<label class="text-[10px] text-text-muted uppercase">{t(locale, 'visits.notes')}</label>
+										</label>
+										<label class="block">
+											<span class="text-[10px] text-text-muted uppercase">{t(locale, 'visits.notes')}</span>
 											<input type="text" name="notes" value={visit.notes ?? ''} class="w-full px-2 py-1.5 bg-background border border-border rounded-lg text-xs" />
-										</div>
+										</label>
 										<div class="flex gap-1">
 											<button type="submit" class="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover transition-colors">{t(locale, 'common.save')}</button>
 											<button type="button" onclick={() => editingVisit = null} class="px-3 py-1.5 bg-surface-sunken text-text-secondary rounded-lg text-xs font-medium hover:bg-border transition-colors">{t(locale, 'common.cancel')}</button>
@@ -331,11 +332,13 @@
 							</tr>
 						{/if}
 					{/each}
-					{#if data.visits.length === 0}
+					{#if data.items.length === 0}
 						<tr><td colspan="8" class="px-4 py-12 text-center text-text-muted">{t(locale, 'common.no_results')}</td></tr>
 					{/if}
 				</tbody>
 			</table>
 		</div>
 	</div>
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

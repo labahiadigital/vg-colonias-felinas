@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import type { PageData } from './$types.js';
 	import { t } from '$lib/i18n/index.js';
+	import { createMap, createDraggableMarker, type LeafletModule } from '$lib/leaflet-adapter.js';
+	import type { Map as LeafletMap, Marker } from 'leaflet';
 
 	let { data }: { data: PageData } = $props();
 	let locale = $derived(data.locale);
@@ -14,9 +16,10 @@
 	let submitting = $state(false);
 	let submitted = $state(false);
 	let error = $state('');
-	let mapContainer: HTMLDivElement;
-	let map: any;
-	let marker: any;
+	let mapContainer = $state<HTMLDivElement>();
+	let map: LeafletMap | null = null;
+	let marker: Marker | null = null;
+	let leafletModule: LeafletModule | null = null;
 	let geolocating = $state(false);
 
 	const categories = [
@@ -34,7 +37,7 @@
 				latitude = pos.coords.latitude;
 				longitude = pos.coords.longitude;
 				if (map) {
-					map.setView([latitude, longitude], 16);
+					map.setView([latitude!, longitude!], 16);
 					updateMarker();
 				}
 				geolocating = false;
@@ -45,32 +48,28 @@
 	}
 
 	function updateMarker() {
-		if (!map || !latitude || !longitude) return;
-		import('leaflet').then(L => {
-			if (marker) marker.setLatLng([latitude!, longitude!]);
-			else {
-				marker = L.marker([latitude!, longitude!], { draggable: true }).addTo(map);
-				marker.on('dragend', () => {
-					const pos = marker.getLatLng();
-					latitude = pos.lat;
-					longitude = pos.lng;
-				});
-			}
-		});
+		if (!map || !latitude || !longitude || !leafletModule) return;
+		if (marker) {
+			marker.setLatLng([latitude, longitude]);
+		} else {
+			marker = createDraggableMarker(leafletModule, map, [latitude, longitude], (lat, lng) => {
+				latitude = lat;
+				longitude = lng;
+			});
+		}
 	}
 
 	onMount(async () => {
-		const L = await import('leaflet');
-		map = L.map(mapContainer).setView([42.8467, -2.6716], 13);
-		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-			attribution: '&copy; OpenStreetMap'
-		}).addTo(map);
-		map.on('click', (e: any) => {
+		if (!mapContainer) return;
+		const result = await createMap(mapContainer);
+		map = result.map;
+		leafletModule = result.L;
+		map.on('click', (e: L.LeafletMouseEvent) => {
 			latitude = e.latlng.lat;
 			longitude = e.latlng.lng;
 			updateMarker();
 		});
-		setTimeout(() => map.invalidateSize(), 100);
+		setTimeout(() => map?.invalidateSize(), 100);
 	});
 
 	async function submit() {
@@ -152,7 +151,7 @@
 				</div>
 
 				<div>
-					<label class="block text-sm font-medium text-text mb-1.5">{t(locale, 'citizen.location')}</label>
+					<span class="block text-sm font-medium text-text mb-1.5">{t(locale, 'citizen.location')}</span>
 					<div class="flex gap-2 mb-3">
 						<button onclick={geolocate} disabled={geolocating} class="px-3 py-2 bg-primary/10 text-primary text-sm font-medium rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">
 							{#if geolocating}

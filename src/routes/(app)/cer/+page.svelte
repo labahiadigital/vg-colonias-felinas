@@ -2,6 +2,7 @@
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types.js';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let locale = $derived(data.locale);
@@ -153,7 +154,7 @@
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-border">
-						{#each data.actions as a}
+						{#each data.items as a}
 							{@const badge = statusLabel(a)}
 							<tr class="hover:bg-surface-sunken/50 transition-colors">
 								<td class="px-4 py-3 font-medium">
@@ -171,7 +172,7 @@
 								<td class="px-4 py-3 text-text-muted">{a.collaboratorName || '-'}</td>
 							</tr>
 						{/each}
-						{#if data.actions.length === 0}
+						{#if data.items.length === 0}
 							<tr><td colspan="7" class="px-4 py-12 text-center text-text-muted">{t(locale, 'common.no_results')}</td></tr>
 						{/if}
 					</tbody>
@@ -179,4 +180,6 @@
 			</div>
 		</div>
 	{/if}
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

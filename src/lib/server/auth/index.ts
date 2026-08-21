@@ -6,12 +6,17 @@ import { db } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import { loginAttempts } from '../db/schema.js';
 import { env } from '$env/dynamic/private';
+import { createLogger } from '../logger.js';
 
-const PASSWORD_ROTATION_DAYS = parseInt(env.PASSWORD_ROTATION_DAYS || '90');
-const MAX_FAILED_ATTEMPTS = parseInt(env.MAX_FAILED_ATTEMPTS || '5');
-const LOCKOUT_DURATION_MINUTES = parseInt(env.LOCKOUT_DURATION_MINUTES || '30');
+const log = createLogger('auth');
 
-export { PASSWORD_ROTATION_DAYS, MAX_FAILED_ATTEMPTS, LOCKOUT_DURATION_MINUTES };
+const PASSWORD_ROTATION_DAYS = parseInt(env.PASSWORD_ROTATION_DAYS || '90', 10);
+const MAX_FAILED_ATTEMPTS = parseInt(env.MAX_FAILED_ATTEMPTS || '5', 10);
+const LOCKOUT_DURATION_MINUTES = parseInt(env.LOCKOUT_DURATION_MINUTES || '30', 10);
+const MIN_PASSWORD_LENGTH = 12;
+const MAX_PASSWORD_LENGTH = 128;
+
+export { PASSWORD_ROTATION_DAYS, MAX_FAILED_ATTEMPTS, LOCKOUT_DURATION_MINUTES, MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH };
 
 async function logLoginAttempt(email: string, success: boolean, ipAddress?: string, userAgent?: string, failureReason?: string) {
 	try {
@@ -23,7 +28,7 @@ async function logLoginAttempt(email: string, success: boolean, ipAddress?: stri
 			failureReason: failureReason ?? null
 		});
 	} catch {
-		console.error('Failed to log login attempt');
+		log.error('Failed to log login attempt', { email });
 	}
 }
 
@@ -41,12 +46,12 @@ export const auth = betterAuth({
 			verification: schema.verifications
 		}
 	}),
-	secret: env.BETTER_AUTH_SECRET!,
+	secret: env.BETTER_AUTH_SECRET ?? (() => { throw new Error('BETTER_AUTH_SECRET environment variable is required'); })(),
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: false,
-		minPasswordLength: 12,
-		maxPasswordLength: 128
+		minPasswordLength: MIN_PASSWORD_LENGTH,
+		maxPasswordLength: MAX_PASSWORD_LENGTH
 	},
 	plugins: [
 		twoFactor({

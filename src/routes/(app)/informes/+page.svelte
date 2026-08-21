@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { t } from '$lib/i18n/index.js';
+	import { t, translateEntity, translateAction } from '$lib/i18n/index.js';
+	import { computeRate, toDateString, formatAuditDetails } from '$lib/index.js';
 	import type { PageData } from './$types.js';
 
 	let { data }: { data: PageData } = $props();
@@ -44,30 +45,11 @@
 		return t(locale, key) || c;
 	}
 
-	function translateAction(action: string): string {
-		const key = `activity.action.${action.toLowerCase()}`;
-		const translated = t(locale, key);
-		return translated !== key ? translated : action;
-	}
+	
 
-	function translateEntity(entity: string): string {
-		const key = `activity.entity.${entity.toLowerCase()}`;
-		const translated = t(locale, key);
-		return translated !== key ? translated : entity;
-	}
+	
 
-	function formatAuditDetails(details: unknown): string {
-		if (!details || typeof details !== 'object') return '';
-		const d = details as Record<string, unknown>;
-		const parts: string[] = [];
-		if (d.name) parts.push(String(d.name));
-		if (d.type) parts.push(String(d.type));
-		if (d.format) parts.push(String(d.format).toUpperCase());
-		if (d.status) parts.push(String(d.status));
-		if (d.category) parts.push(String(d.category));
-		if (d.label) parts.push(String(d.label));
-		return parts.join(' · ') || '';
-	}
+	
 
 	const complianceLaws = $derived([
 		{
@@ -130,7 +112,7 @@
 	const complianceSummary = $derived.by(() => {
 		const all = complianceLaws.flatMap(g => g.articles);
 		const passed = all.filter(a => a.ok).length;
-		return { passed, total: all.length, pct: all.length > 0 ? Math.round((passed / all.length) * 100) : 0 };
+		return { passed, total: all.length, pct: computeRate(passed, all.length) };
 	});
 
 	function exportCSV() {
@@ -151,7 +133,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `informe-colonias-${new Date().toISOString().split('T')[0]}.csv`;
+		a.download = `informe-colonias-${toDateString()}.csv`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -359,8 +341,8 @@
 								<tr class="hover:bg-surface-sunken/50 transition-colors">
 									<td class="px-4 py-3 text-xs text-text-muted">{log.createdAt ? new Date(log.createdAt).toLocaleString(locale) : '-'}</td>
 									<td class="px-4 py-3 text-text-secondary">{log.userName ?? '-'}</td>
-									<td class="px-4 py-3 text-text-secondary">{translateEntity(log.entity)}</td>
-									<td class="px-4 py-3 text-text-secondary">{translateAction(log.action)}</td>
+									<td class="px-4 py-3 text-text-secondary">{translateEntity(locale, log.entity)}</td>
+									<td class="px-4 py-3 text-text-secondary">{translateAction(locale, log.action)}</td>
 									<td class="px-4 py-3 text-xs text-text-muted max-w-xs truncate">{formatAuditDetails(log.details)}</td>
 								</tr>
 							{/each}

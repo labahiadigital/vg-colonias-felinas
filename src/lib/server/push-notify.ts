@@ -1,9 +1,18 @@
 import { db } from '$lib/server/db/index.js';
-import { pushSubscriptions, users } from '$lib/server/db/schema.js';
+import { pushSubscriptions, organizationMembers } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
+import webpush from 'web-push';
 
-interface PushPayload {
+export function extractStatusCode(err: unknown): number | undefined {
+	if (typeof err === 'object' && err !== null && 'statusCode' in err) {
+		const code = (err as { statusCode: unknown }).statusCode;
+		return typeof code === 'number' ? code : undefined;
+	}
+	return undefined;
+}
+
+export interface PushPayload {
 	title: string;
 	body: string;
 	icon?: string;
@@ -11,62 +20,71 @@ interface PushPayload {
 	tag?: string;
 }
 
+export function buildPushPayload(payload: PushPayload): string {
+	return JSON.stringify({
+		title: payload.title,
+		body: payload.body,
+		icon: payload.icon || '/icon-192.png',
+		data: { url: payload.url || '/dashboard' },
+		tag: payload.tag
+	});
+}
+
+export function shouldDeleteSubscription(statusCode: number): boolean {
+	return statusCode === 410 || statusCode === 404;
+}
+
+let vapidConfigured = false;
+
+function ensureVapid(): boolean {
+	if (vapidConfigured) return true;
+
+	const publicKey = env.VAPID_PUBLIC_KEY;
+	const privateKey = env.VAPID_PRIVATE_KEY;
+	const subject = env.VAPID_SUBJECT || env.BETTER_AUTH_URL || 'mailto:admin@example.com';
+
+	if (!publicKey || !privateKey) return false;
+
+	webpush.setVapidDetails(subject, publicKey, privateKey);
+	vapidConfigured = true;
+	return true;
+}
+
 export async function sendPushNotification(userId: string, payload: PushPayload): Promise<{ sent: number; failed: number }> {
+	if (!ensureVapid()) return { sent: 0, failed: 0 };
+
 	const subs = await db
 		.select()
 		.from(pushSubscriptions)
 		.where(eq(pushSubscriptions.userId, userId));
 
 	if (subs.length === 0) {
-		await sendEmailFallback(userId, payload);
 		return { sent: 0, failed: 0 };
 	}
 
+	const pushBody = buildPushPayload(payload);
+
+	const results = await Promise.allSettled(
+		subs.map(sub =>
+			webpush.sendNotification(
+				{ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+				pushBody,
+				{ TTL: 86400 }
+			).catch((err: unknown) => {
+				const status = extractStatusCode(err);
+				if (status !== undefined && shouldDeleteSubscription(status)) {
+					void db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id)).catch(() => {});
+				}
+				throw err;
+			})
+		)
+	);
+
 	let sent = 0;
 	let failed = 0;
-
-	for (const sub of subs) {
-		try {
-			const vapidPublic = env.VAPID_PUBLIC_KEY;
-			const vapidPrivate = env.VAPID_PRIVATE_KEY;
-
-			if (!vapidPublic || !vapidPrivate) {
-				failed++;
-				continue;
-			}
-
-			const pushPayload = JSON.stringify({
-				title: payload.title,
-				body: payload.body,
-				icon: payload.icon || '/icon-192.png',
-				data: { url: payload.url || '/dashboard' },
-				tag: payload.tag
-			});
-
-			const response = await fetch(sub.endpoint, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/octet-stream',
-					'TTL': '86400'
-				},
-				body: pushPayload
-			});
-
-			if (response.ok || response.status === 201) {
-				sent++;
-			} else if (response.status === 410 || response.status === 404) {
-				await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
-				failed++;
-			} else {
-				failed++;
-			}
-		} catch {
-			failed++;
-		}
-	}
-
-	if (sent === 0) {
-		await sendEmailFallback(userId, payload);
+	for (const r of results) {
+		if (r.status === 'fulfilled') sent++;
+		else failed++;
 	}
 
 	return { sent, failed };
@@ -74,30 +92,16 @@ export async function sendPushNotification(userId: string, payload: PushPayload)
 
 export async function sendPushToAll(organizationId: string, payload: PushPayload): Promise<{ sent: number; failed: number }> {
 	const orgUsers = await db
-		.select({ id: users.id })
-		.from(users)
-		.where(eq(users.organizationId, organizationId));
+		.select({ id: organizationMembers.userId })
+		.from(organizationMembers)
+		.where(eq(organizationMembers.organizationId, organizationId));
 
-	let totalSent = 0;
-	let totalFailed = 0;
+	const results = await Promise.all(
+		orgUsers.map(member => sendPushNotification(member.id, payload))
+	);
 
-	for (const user of orgUsers) {
-		const result = await sendPushNotification(user.id, payload);
-		totalSent += result.sent;
-		totalFailed += result.failed;
-	}
-
-	return { sent: totalSent, failed: totalFailed };
-}
-
-async function sendEmailFallback(userId: string, payload: PushPayload): Promise<void> {
-	const [user] = await db
-		.select({ email: users.email, name: users.name })
-		.from(users)
-		.where(eq(users.id, userId))
-		.limit(1);
-
-	if (!user?.email) return;
-
-	console.log(`[Email Fallback] To: ${user.email} | ${payload.title}: ${payload.body}`);
+	return results.reduce(
+		(acc, r) => ({ sent: acc.sent + r.sent, failed: acc.failed + r.failed }),
+		{ sent: 0, failed: 0 }
+	);
 }

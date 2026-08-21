@@ -1,12 +1,12 @@
 import { db } from '$lib/server/db/index.js';
 import { apiKeys } from '$lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 interface ApiAuthResult {
 	valid: boolean;
 	error?: string;
-	organizationId?: string;
+	organizationId?: string | null;
 	remaining?: number;
 }
 
@@ -19,7 +19,6 @@ export async function validateApiKey(request: Request, requiredScope?: string): 
 
 	const rawKey = authHeader.replace('Bearer ', '');
 	const keyHash = createHash('sha256').update(rawKey).digest('hex');
-	const prefix = rawKey.substring(0, 8);
 
 	const [key] = await db
 		.select()
@@ -36,7 +35,7 @@ export async function validateApiKey(request: Request, requiredScope?: string): 
 	}
 
 	if (requiredScope && key.scopes) {
-		const scopes = key.scopes as string[];
+		const scopes = Array.isArray(key.scopes) ? key.scopes.filter((s): s is string => typeof s === 'string') : [];
 		const hasScope = scopes.includes('*') || scopes.includes(requiredScope);
 		if (!hasScope) {
 			return { valid: false, error: `Insufficient scope. Required: ${requiredScope}` };
@@ -47,17 +46,39 @@ export async function validateApiKey(request: Request, requiredScope?: string): 
 
 	return {
 		valid: true,
-		organizationId: key.organizationId ?? undefined,
+		organizationId: key.organizationId,
 		remaining: key.rateLimit ?? 1000
 	};
 }
 
-export function generateApiKey(): { key: string; hash: string; prefix: string } {
-	const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	let randomPart = '';
-	for (let i = 0; i < 40; i++) {
-		randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+/**
+ * Combined guard for public API endpoints: validates API key + rate limit in one call.
+ * Returns the authenticated org context or a ready-to-return error Response.
+ */
+export async function requireApiAuth(
+	request: Request,
+	scope: string
+): Promise<{ organizationId: string | null; remaining: number } | Response> {
+	const auth = await validateApiKey(request, scope);
+	if (!auth.valid) {
+		return new Response(JSON.stringify({ error: auth.error }), {
+			status: 401,
+			headers: { 'Content-Type': 'application/json' }
+		});
 	}
+
+	const { rateLimitGuard } = await import('./rate-limit.js');
+	const blocked = rateLimitGuard('publicApi', auth.organizationId ?? undefined, request);
+	if (blocked) return blocked;
+
+	return {
+		organizationId: auth.organizationId ?? null,
+		remaining: auth.remaining ?? 1000
+	};
+}
+
+export function generateApiKey(): { key: string; hash: string; prefix: string } {
+	const randomPart = randomBytes(30).toString('base64url');
 	const key = `gtp_${randomPart}`;
 	const hash = createHash('sha256').update(key).digest('hex');
 	const prefix = key.substring(0, 8);

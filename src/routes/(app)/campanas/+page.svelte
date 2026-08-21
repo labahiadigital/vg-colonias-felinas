@@ -2,6 +2,7 @@
 	import { t } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
 	import type { PageData } from './$types.js';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	let { data }: { data: PageData } = $props();
 	let locale = $derived(data.locale);
@@ -88,14 +89,14 @@
 		</div>
 	{/if}
 
-	{#if data.campaigns.length === 0}
+	{#if data.items.length === 0}
 		<div class="bg-surface rounded-xl border border-border p-12 text-center">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-12 h-12 text-text-muted mx-auto mb-3"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12L12 12"/><circle cx="18" cy="18" r="3"/></svg>
 			<p class="text-text-muted text-sm">{t(locale, 'campaigns.no_campaigns')}</p>
 		</div>
 	{:else}
 		<div class="space-y-4">
-			{#each data.campaigns as campaign}
+			{#each data.items as campaign}
 				<div class="bg-surface rounded-xl border border-border overflow-hidden">
 					<div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 						<div>
@@ -148,40 +149,40 @@
 						</div>
 					{/if}
 
-					<!-- Timeline visual -->
-					{@const events = eventsByCampaign[campaign.id] ?? []}
-					{#if events.length > 0}
-						<div class="border-t border-border">
-							<button onclick={() => expandedTimeline = expandedTimeline === campaign.id ? null : campaign.id} class="w-full px-5 py-2.5 flex items-center justify-between text-xs font-medium text-text-muted hover:bg-surface-sunken transition-colors">
-								<span>{t(locale, 'campaigns.timeline')} ({events.length})</span>
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 transition-transform {expandedTimeline === campaign.id ? 'rotate-180' : ''}"><path d="M6 9l6 6 6-6"/></svg>
-							</button>
-							{#if expandedTimeline === campaign.id}
-								<div class="px-5 pb-4">
-									<div class="relative ml-3 border-l-2 border-border pl-6 space-y-4">
-										{#each events as event}
-											{@const meta = eventTypeIcons[event.eventType] ?? { icon: '📋', color: 'bg-surface-sunken border-border' }}
-											<div class="relative">
-												<div class="absolute -left-[31px] top-0.5 w-5 h-5 rounded-full border-2 {meta.color} flex items-center justify-center text-[10px]">{meta.icon}</div>
-												<div>
-													<p class="text-sm font-medium text-text">{t(locale, `campaigns.${event.eventType}`)}</p>
-													{#if event.notes}
-														<p class="text-xs text-text-muted mt-0.5">{event.notes}</p>
-													{/if}
-													<p class="text-[10px] text-text-muted mt-0.5">
-														{formatEventDate(event.performedAt)}
-														{#if event.performedByName} · {event.performedByName}{/if}
-													</p>
-												</div>
+					{#if (eventsByCampaign[campaign.id] ?? []).length > 0}
+					<div class="border-t border-border">
+						<button onclick={() => expandedTimeline = expandedTimeline === campaign.id ? null : campaign.id} class="w-full px-5 py-2.5 flex items-center justify-between text-xs font-medium text-text-muted hover:bg-surface-sunken transition-colors">
+							<span>{t(locale, 'campaigns.timeline')} ({(eventsByCampaign[campaign.id] ?? []).length})</span>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 transition-transform {expandedTimeline === campaign.id ? 'rotate-180' : ''}"><path d="M6 9l6 6 6-6"/></svg>
+						</button>
+						{#if expandedTimeline === campaign.id}
+							<div class="px-5 pb-4">
+								<div class="relative ml-3 border-l-2 border-border pl-6 space-y-4">
+									{#each eventsByCampaign[campaign.id] ?? [] as event}
+										{@const meta = eventTypeIcons[event.eventType] ?? { icon: '📋', color: 'bg-surface-sunken border-border' }}
+										<div class="relative">
+											<div class="absolute -left-[31px] top-0.5 w-5 h-5 rounded-full border-2 {meta.color} flex items-center justify-center text-[10px]">{meta.icon}</div>
+											<div>
+												<p class="text-sm font-medium text-text">{t(locale, `campaigns.${event.eventType}`)}</p>
+												{#if event.notes}
+													<p class="text-xs text-text-muted mt-0.5">{event.notes}</p>
+												{/if}
+												<p class="text-[10px] text-text-muted mt-0.5">
+													{formatEventDate(event.performedAt)}
+													{#if event.performedByName} · {event.performedByName}{/if}
+												</p>
 											</div>
-										{/each}
-									</div>
+										</div>
+									{/each}
 								</div>
-							{/if}
-						</div>
-					{/if}
+							</div>
+						{/if}
+					</div>
+				{/if}
 				</div>
 			{/each}
 		</div>
 	{/if}
+
+	<Pagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalItems} pageSize={data.pageSize} />
 </div>

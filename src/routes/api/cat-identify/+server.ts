@@ -1,23 +1,30 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
+import { requireApiUser, getFormFile } from '$lib/server/action-helpers.js';
 import { db } from '$lib/server/db/index.js';
 import { cats, colonies } from '$lib/server/db/schema.js';
-import { eq, isNotNull } from 'drizzle-orm';
+import { eq, and, isNotNull } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
+import { orgScope } from '$lib/server/tenant.js';
+import { rankMatches, type AIAnalysis } from '$lib/server/cat-scoring.js';
+import { rateLimitGuard } from '$lib/server/rate-limit.js';
+import { requestLogger } from '$lib/server/logger.js';
+
+const MAX_PHOTO_SIZE = 10 * 1024 * 1024; // 10 MB
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user) {
-		return json({ error: 'No autenticado' }, { status: 401 });
-	}
+	requireApiUser(locals);
+	const blocked = rateLimitGuard('ai', locals.user?.id, request);
+	if (blocked) return blocked;
 
 	const formData = await request.formData();
-	const photo = formData.get('photo') as File | null;
+	const photo = getFormFile(formData, 'photo');
 
 	if (!photo || photo.size === 0) {
 		return json({ error: 'Se requiere una foto' }, { status: 400 });
 	}
 
-	if (photo.size > 10 * 1024 * 1024) {
+	if (photo.size > MAX_PHOTO_SIZE) {
 		return json({ error: 'Imagen demasiado grande (máximo 10MB)' }, { status: 400 });
 	}
 
@@ -25,6 +32,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const base64Image = Buffer.from(arrayBuffer).toString('base64');
 	const mimeType = photo.type || 'image/jpeg';
 
+	const orgId = locals.organizationId;
 	const catsWithPhotos = await db
 		.select({
 			id: cats.id,
@@ -40,7 +48,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		})
 		.from(cats)
 		.leftJoin(colonies, eq(cats.colonyId, colonies.id))
-		.where(isNotNull(cats.photo))
+		.where(and(isNotNull(cats.photo), orgScope(cats.organizationId, orgId)))
 		.limit(200);
 
 	const openaiKey = env.OPENAI_API_KEY;
@@ -112,53 +120,7 @@ Responde SOLO con el JSON, sin texto adicional.`;
 			};
 		}
 
-		const colorLower = (analysis.color ?? '').toLowerCase();
-		const patternLower = (analysis.pattern ?? '').toLowerCase();
-
-		const scored = catsWithPhotos.map((cat) => {
-			let score = 0;
-			const name = (cat.name ?? '').toLowerCase();
-
-			if (colorLower && name.includes(colorLower)) score += 20;
-
-			const colorTerms: Record<string, string[]> = {
-				negro: ['negro', 'negra', 'black', 'oscuro'],
-				blanco: ['blanco', 'blanca', 'white'],
-				naranja: ['naranja', 'orange', 'ginger', 'rojo', 'pelirrojo'],
-				gris: ['gris', 'grey', 'gray', 'azul'],
-				atigrado: ['atigrado', 'tabby', 'rayas', 'tigre'],
-				tricolor: ['tricolor', 'calico', 'carey', 'tortoiseshell'],
-				siames: ['siames', 'siamese', 'point']
-			};
-
-			for (const [, terms] of Object.entries(colorTerms)) {
-				const matchesColor = terms.some(t => colorLower.includes(t) || patternLower.includes(t));
-				const matchesName = terms.some(t => name.includes(t));
-				if (matchesColor && matchesName) score += 15;
-			}
-
-			if (analysis.sex_guess && analysis.sex_guess !== 'indeterminado' && cat.sex) {
-				const aiSex = analysis.sex_guess.toLowerCase();
-				const catSex = cat.sex.toLowerCase();
-				if ((aiSex.includes('macho') && catSex === 'male') ||
-					(aiSex.includes('hembra') && catSex === 'female')) {
-					score += 10;
-				}
-			}
-
-			if (analysis.estimatedAge && cat.estimatedAge) {
-				const aiAge = analysis.estimatedAge.toLowerCase();
-				const catAge = cat.estimatedAge.toLowerCase();
-				if (aiAge === catAge) score += 5;
-			}
-
-			return { ...cat, score };
-		});
-
-		const matches = scored
-			.filter(c => c.score > 0)
-			.sort((a, b) => b.score - a.score)
-			.slice(0, 5);
+		const matches = rankMatches(catsWithPhotos, analysis as AIAnalysis);
 
 		return json({
 			matches,
@@ -167,7 +129,7 @@ Responde SOLO con el JSON, sin texto adicional.`;
 			method: 'ai'
 		});
 	} catch (err) {
-		console.error('Cat identification error:', err);
+		requestLogger('cat-identify', request).error('Cat identification error', { error: String(err) });
 		return json({
 			matches: [],
 			analysis: {

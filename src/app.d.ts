@@ -9,6 +9,8 @@ declare global {
 				email: string;
 				image?: string | null;
 				language?: string;
+				role?: string;
+				twoFactorEnabled?: boolean | null;
 			};
 			session?: {
 				id: string;
@@ -16,6 +18,8 @@ declare global {
 				expiresAt: Date;
 			};
 			locale: Locale;
+			organizationId: string | null;
+			correlationId: string;
 		}
 	}
 }

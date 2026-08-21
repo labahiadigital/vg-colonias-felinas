@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { t } from '$lib/i18n/index.js';
+	import { t, translateEntity, translateAction } from '$lib/i18n/index.js';
 	import { enhance } from '$app/forms';
 	import { authClient } from '$lib/auth-client.js';
+	import { formatAuditDetails } from '$lib/index.js';
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -24,14 +25,14 @@
 			const res = await authClient.twoFactor.enable({ password: '' });
 			if (res.data) {
 				totpSetupUri = res.data.totpURI;
-				totpSecret = res.data.secret;
+				totpSecret = new URL(res.data.totpURI).searchParams.get('secret') ?? '';
 				backupCodes = res.data.backupCodes ?? [];
 				showTotpSetup = true;
 			} else {
-				totpError = 'Error al generar TOTP';
-			}
-		} catch {
-			totpError = 'Error de conexión';
+			totpError = t(locale, 'settings.2fa_gen_error');
+		}
+	} catch {
+		totpError = t(locale, 'settings.connection_error');
 		} finally {
 			totpLoading = false;
 		}
@@ -49,7 +50,7 @@
 				totpError = t(locale, 'settings.2fa_invalid_code');
 			}
 		} catch {
-			totpError = 'Error de verificación';
+			totpError = t(locale, 'settings.2fa_verify_error');
 		} finally {
 			totpLoading = false;
 		}
@@ -62,7 +63,7 @@
 			await authClient.twoFactor.disable({ password: '' });
 			totpSuccess = t(locale, 'settings.2fa_disabled_success');
 		} catch {
-			totpError = 'Error al desactivar';
+			totpError = t(locale, 'settings.2fa_disable_error');
 		} finally {
 			totpLoading = false;
 		}
@@ -107,9 +108,10 @@
 	});
 
 	async function handleImport() {
-		const entity = (document.getElementById('importEntity') as HTMLSelectElement)?.value;
-		const fileInput = document.getElementById('importFile') as HTMLInputElement;
-		const file = fileInput?.files?.[0];
+		const entityEl = document.getElementById('importEntity');
+		const entity = entityEl instanceof HTMLSelectElement ? entityEl.value : '';
+		const fileInput = document.getElementById('importFile');
+		const file = fileInput instanceof HTMLInputElement ? fileInput.files?.[0] : undefined;
 		if (!file) { importResult = t(locale, 'settings.select_file'); return; }
 		const fd = new FormData();
 		fd.append('file', file);
@@ -143,35 +145,11 @@
 		{ id: 'about', label: t(locale, 'settings.about') }
 	]);
 
-	function translateAction(action: string): string {
-		const key = `activity.action.${action.toLowerCase()}`;
-		const translated = t(locale, key);
-		return translated !== key ? translated : action;
-	}
+	
 
-	function translateEntity(entity: string): string {
-		const key = `activity.entity.${entity.toLowerCase()}`;
-		const translated = t(locale, key);
-		return translated !== key ? translated : entity;
-	}
+	
 
-	function formatAuditDetails(details: unknown): string {
-		if (!details || typeof details !== 'object') return '-';
-		const d = details as Record<string, unknown>;
-		const parts: string[] = [];
-		if (d.name) parts.push(String(d.name));
-		if (d.cat) parts.push(String(d.cat));
-		if (d.type) parts.push(String(d.type));
-		if (d.format) parts.push(String(d.format).toUpperCase());
-		if (d.status) parts.push(String(d.status));
-		if (d.newStatus) parts.push(`→ ${String(d.newStatus)}`);
-		if (d.category) parts.push(String(d.category));
-		if (d.colony) parts.push(String(d.colony));
-		if (d.label) parts.push(String(d.label));
-		if (d.certNumber) parts.push(String(d.certNumber));
-		if (d.priority) parts.push(String(d.priority));
-		return parts.join(' · ') || '-';
-	}
+	
 
 	const catalogTypeKeys: Record<string, string> = {
 		colony_status: 'settings.cat_type.colony_status',
@@ -235,7 +213,7 @@
 							</div>
 							{#if data.userRole}
 								<div>
-									<label class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'settings.role')}</label>
+									<span class="block text-sm font-medium text-text-secondary mb-1.5">{t(locale, 'settings.role')}</span>
 									<div class="px-3 py-2.5 bg-surface-sunken border border-border rounded-lg text-sm text-text-secondary capitalize min-h-[44px] flex items-center">{data.userRole}</div>
 								</div>
 							{/if}
@@ -523,7 +501,7 @@
 							<label for="catType" class="block text-xs font-medium text-text-muted mb-1">{t(locale, 'settings.catalog_type')}</label>
 							<select name="type" id="catType" required class="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[40px]">
 								{#each catalogTypeValues as ctVal}
-									<option value={ctVal}>{t(locale, catalogTypeKeys[ctVal])}</option>
+									<option value={ctVal}>{t(locale, catalogTypeKeys[ctVal] ?? ctVal)}</option>
 								{/each}
 							</select>
 						</div>
@@ -563,7 +541,7 @@
 						<div class="space-y-4">
 							{#each Object.entries(groupedCatalogs) as [type, items]}
 								<div class="border border-border rounded-lg overflow-hidden">
-									<div class="px-4 py-2.5 bg-surface-sunken text-sm font-medium text-text-secondary">{catalogTypeKeys[type] ? t(locale, catalogTypeKeys[type]) : type}</div>
+									<div class="px-4 py-2.5 bg-surface-sunken text-sm font-medium text-text-secondary">{catalogTypeKeys[type] ? t(locale, catalogTypeKeys[type] ?? type) : type}</div>
 								<div class="overflow-x-auto">
 									<table class="w-full text-sm">
 										<thead class="bg-background text-text-muted text-left text-xs">
@@ -677,17 +655,17 @@
 										<tr class="hover:bg-surface-sunken/50 transition-colors">
 											<td class="px-4 py-3 text-xs text-text-muted">{log.createdAt ? new Date(log.createdAt).toLocaleString(locale) : '-'}</td>
 											<td class="px-4 py-3 text-text-secondary">{log.userName ?? '-'}</td>
-											<td class="px-4 py-3 text-text-secondary">{translateEntity(log.entity)}</td>
+											<td class="px-4 py-3 text-text-secondary">{translateEntity(locale, log.entity)}</td>
 											<td class="px-4 py-3">
 												<span class="px-2 py-0.5 rounded-md text-[11px] font-medium
 													{log.action === 'create' ? 'bg-success/8 text-success' :
 													log.action === 'delete' ? 'bg-danger/8 text-danger' :
 													log.action === 'export' ? 'bg-info/8 text-info' :
 													'bg-surface-sunken text-text-secondary'}">
-													{translateAction(log.action)}
+													{translateAction(locale, log.action)}
 												</span>
 											</td>
-											<td class="px-4 py-3 text-xs text-text-muted max-w-xs truncate">{formatAuditDetails(log.details)}</td>
+											<td class="px-4 py-3 text-xs text-text-muted max-w-xs truncate">{formatAuditDetails(log.details, '-')}</td>
 										</tr>
 									{/each}
 								</tbody>

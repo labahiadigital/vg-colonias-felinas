@@ -43,14 +43,15 @@ describe('i18n completeness', () => {
 		['it', itLocale],
 		['fr', fr],
 		['gl', gl]
-	])('%s locale', (locale, translations) => {
+	])('%s locale', (_locale, translations) => {
 		it('has at least some translations', () => {
 			expect(Object.keys(translations).length).toBeGreaterThan(10);
 		});
 
 		it.each(CRITICAL_KEYS)('has critical key "%s"', (key) => {
-			expect(translations[key]).toBeDefined();
-			expect(translations[key].length).toBeGreaterThan(0);
+			const val = translations[key];
+			expect(val).toBeDefined();
+			expect(val!.length).toBeGreaterThan(0);
 		});
 
 		it('at least 80% of keys also exist in the Spanish source', () => {

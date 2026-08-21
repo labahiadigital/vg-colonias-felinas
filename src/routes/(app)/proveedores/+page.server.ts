@@ -1,54 +1,57 @@
 import type { PageServerLoad, Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { providers, providerInterventions, cats, colonies } from '$lib/server/db/schema.js';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, and } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
-import { logAudit } from '$lib/server/audit.js';
+import { requireAuthContext, getFormField, getFormNumber, requireField, requireFields } from '$lib/server/action-helpers.js';
+import { orgScope, verifyOrgOwnership, loadOrgColonies, loadOrgCats } from '$lib/server/tenant.js';
+import { guardedUpdate, guardedDelete, guardedInsert } from '$lib/server/db-helpers.js';
+import { parsePagination, paginateWithCount } from '$lib/server/pagination.js';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	const allProviders = await db
-		.select({
-			id: providers.id,
-			name: providers.name,
-			type: providers.type,
-			contactPerson: providers.contactPerson,
-			email: providers.email,
-			phone: providers.phone,
-			address: providers.address,
-			city: providers.city,
-			specializations: providers.specializations,
-			licenseNumber: providers.licenseNumber,
-			contractStart: providers.contractStart,
-			contractEnd: providers.contractEnd,
-			status: providers.status,
-			createdAt: providers.createdAt
-		})
-		.from(providers)
-		.orderBy(desc(providers.createdAt));
+export const load: PageServerLoad = async ({ locals, url }) => {
+	const orgId = locals.organizationId;
+	const pagination = parsePagination(url);
+	const whereProv = orgScope(providers.organizationId, orgId);
 
-	const interventionCounts = await db
-		.select({
+	const baseSelect = db.select({
+		id: providers.id,
+		name: providers.name,
+		type: providers.type,
+		contactPerson: providers.contactPerson,
+		email: providers.email,
+		phone: providers.phone,
+		address: providers.address,
+		city: providers.city,
+		specializations: providers.specializations,
+		licenseNumber: providers.licenseNumber,
+		contractStart: providers.contractStart,
+		contractEnd: providers.contractEnd,
+		status: providers.status,
+		createdAt: providers.createdAt
+	}).from(providers).where(whereProv).orderBy(desc(providers.createdAt)).$dynamic();
+
+	const [paginated, interventionCounts, allColonies, allCats] = await Promise.all([
+		paginateWithCount(baseSelect, providers, whereProv, pagination),
+		db.select({
 			providerId: providerInterventions.providerId,
 			count: sql<number>`count(*)`,
 			totalCost: sql<number>`coalesce(sum(${providerInterventions.cost}), 0)`
-		})
-		.from(providerInterventions)
-		.groupBy(providerInterventions.providerId);
+		}).from(providerInterventions).where(orgScope(providerInterventions.organizationId, orgId)).groupBy(providerInterventions.providerId),
+		loadOrgColonies(orgId),
+		loadOrgCats(orgId)
+	]);
 
 	const countsMap = new Map(interventionCounts.map(c => [c.providerId, { count: c.count, totalCost: c.totalCost }]));
-
-	const providersWithStats = allProviders.map(p => ({
+	const items = paginated.items.map(p => ({
 		...p,
 		interventionCount: countsMap.get(p.id)?.count ?? 0,
 		totalCost: countsMap.get(p.id)?.totalCost ?? 0
 	}));
 
-	const allColonies = await db.select({ id: colonies.id, name: colonies.name }).from(colonies);
-	const allCats = await db.select({ id: cats.id, name: cats.name }).from(cats);
-
 	return {
 		locale: locals.locale,
-		providers: providersWithStats,
+		...paginated,
+		items,
 		colonies: allColonies,
 		cats: allCats
 	};
@@ -56,25 +59,25 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
 
-		const name = fd.get('name') as string;
-		const type = fd.get('type') as string;
-		const contactPerson = fd.get('contactPerson') as string;
-		const email = fd.get('email') as string;
-		const phone = fd.get('phone') as string;
-		const address = fd.get('address') as string;
-		const city = fd.get('city') as string;
-		const licenseNumber = fd.get('licenseNumber') as string;
-		const contractStart = fd.get('contractStart') as string;
-		const contractEnd = fd.get('contractEnd') as string;
+		const name = requireField(fd, 'name', 'El nombre');
 
-		if (!name) return fail(400, { error: 'El nombre es obligatorio' });
+		const type = getFormField(fd, 'type') || 'veterinary';
+		const contactPerson = getFormField(fd, 'contactPerson');
+		const email = getFormField(fd, 'email');
+		const phone = getFormField(fd, 'phone');
+		const address = getFormField(fd, 'address');
+		const city = getFormField(fd, 'city');
+		const licenseNumber = getFormField(fd, 'licenseNumber');
+		const contractStart = getFormField(fd, 'contractStart');
+		const contractEnd = getFormField(fd, 'contractEnd');
 
-		const result = await db.insert(providers).values({
+		await guardedInsert(providers, {
+			organizationId: ctx.organizationId,
 			name,
-			type: type || 'veterinary',
+			type,
 			contactPerson: contactPerson || null,
 			email: email || null,
 			phone: phone || null,
@@ -84,74 +87,78 @@ export const actions: Actions = {
 			contractStart: contractStart || null,
 			contractEnd: contractEnd || null,
 			status: 'active'
-		}).returning();
+		}, ctx, 'provider', 'create', { name, type });
 
-		if (result[0]) {
-			await logAudit({ userId: locals.user.id, entity: 'provider', entityId: result[0].id, action: 'create', details: { name, type } });
-		}
 		return { success: true };
 	},
 
 	addIntervention: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
 
-		const providerId = fd.get('providerId') as string;
-		const catId = fd.get('catId') as string;
-		const colonyId = fd.get('colonyId') as string;
-		const type = fd.get('interventionType') as string;
-		const description = fd.get('description') as string;
-		const cost = parseFloat(fd.get('cost') as string);
-		const performedAt = fd.get('performedAt') as string;
-		const invoiceRef = fd.get('invoiceRef') as string;
+		const { providerId, interventionType: type } = requireFields(fd, {
+			providerId: 'El proveedor', interventionType: 'El tipo'
+		});
 
-		if (!providerId || !type) return fail(400, { error: 'Proveedor y tipo son obligatorios' });
+		if (!await verifyOrgOwnership(providers, providerId, ctx.organizationId)) {
+			return fail(404, { error: 'Proveedor no encontrado' });
+		}
 
-		await db.insert(providerInterventions).values({
+		const catId = getFormField(fd, 'catId');
+		const colonyId = getFormField(fd, 'colonyId');
+
+		if (catId && !await verifyOrgOwnership(cats, catId, ctx.organizationId)) {
+			return fail(404, { error: 'Gato no encontrado' });
+		}
+		if (colonyId && !await verifyOrgOwnership(colonies, colonyId, ctx.organizationId)) {
+			return fail(404, { error: 'Colonia no encontrada' });
+		}
+
+		const description = getFormField(fd, 'description');
+		const cost = getFormNumber(fd, 'cost');
+		const performedAt = getFormField(fd, 'performedAt');
+		const invoiceRef = getFormField(fd, 'invoiceRef');
+
+		await guardedInsert(providerInterventions, {
+			organizationId: ctx.organizationId,
 			providerId,
 			catId: catId || null,
 			colonyId: colonyId || null,
 			type,
 			description: description || null,
-			cost: isNaN(cost) ? null : cost,
+			cost,
 			performedAt: performedAt ? new Date(performedAt) : new Date(),
 			invoiceRef: invoiceRef || null
-		});
+		}, ctx, 'provider_intervention', 'create', { providerId, type, cost });
 
-		await logAudit({ userId: locals.user.id, entity: 'provider_intervention', entityId: providerId, action: 'create', details: { type, cost } });
 		return { interventionSuccess: true };
 	},
 
 	edit: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		const name = fd.get('name') as string;
-		const contactPerson = fd.get('contactPerson') as string;
-		const phone = fd.get('phone') as string;
-		const email = fd.get('email') as string;
+		const id = requireField(fd, 'id', 'El ID');
 
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const name = getFormField(fd, 'name');
+		const contactPerson = getFormField(fd, 'contactPerson');
+		const phone = getFormField(fd, 'phone');
+		const email = getFormField(fd, 'email');
 
-		await db.update(providers).set({
-			...(name && { name }),
-			contactPerson: contactPerson || null,
-			phone: phone || null,
-			email: email || null
-		}).where(eq(providers.id, id));
-
-		await logAudit({ userId: locals.user.id, entity: 'provider', entityId: id, action: 'update', details: { name } });
+		await guardedUpdate(providers, {
+			...(name && { name }), contactPerson: contactPerson || null,
+			phone: phone || null, email: email || null
+		}, and(eq(providers.id, id), orgScope(providers.organizationId, ctx.organizationId)),
+			ctx, 'provider', id, 'update', { name });
 		return { edited: true };
 	},
 
 	delete: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'No autenticado' });
+		const ctx = requireAuthContext(locals, request);
 		const fd = await request.formData();
-		const id = fd.get('id') as string;
-		if (!id) return fail(400, { error: 'ID obligatorio' });
+		const id = requireField(fd, 'id', 'El ID');
 
-		await db.delete(providers).where(eq(providers.id, id));
-		await logAudit({ userId: locals.user.id, entity: 'provider', entityId: id, action: 'delete', details: {} });
+		await guardedDelete(providers, and(eq(providers.id, id), orgScope(providers.organizationId, ctx.organizationId)),
+			ctx, 'provider', id, 'delete');
 		return { deleted: true };
 	}
 };
