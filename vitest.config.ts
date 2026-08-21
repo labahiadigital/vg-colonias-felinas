@@ -22,7 +22,33 @@ export default defineConfig({
 				'**/*.d.ts',
 				'src/routes/**/+page.svelte',
 				'src/routes/**/+layout.svelte'
-			]
+			],
+			thresholds: {
+				'src/lib/server/*.ts': {
+					statements: 70,
+					branches: 60,
+					functions: 65,
+					lines: 70
+				},
+				'src/lib/stores/*.ts': {
+					statements: 80,
+					branches: 75,
+					functions: 80,
+					lines: 80
+				},
+				'src/lib/utils/*.ts': {
+					statements: 65,
+					branches: 70,
+					functions: 60,
+					lines: 65
+				},
+				'src/lib/i18n/*.ts': {
+					statements: 95,
+					branches: 95,
+					functions: 95,
+					lines: 95
+				}
+			}
 		}
 	}
 });
